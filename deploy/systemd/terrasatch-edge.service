@@ -1,0 +1,16 @@
+[Unit]
+Description=TerraSatch Edge Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=%h/.local/share/terrasatch-edge/venv/bin/terrasatch-edge run
+Restart=on-failure
+RestartSec=5
+Environment=TERRASATCH_EDGE_CONFIG_DIR=%h/.config/terrasatch-edge
+Environment=TERRASATCH_EDGE_STATE_DIR=%h/.local/state/terrasatch-edge
+
+[Install]
+WantedBy=default.target
