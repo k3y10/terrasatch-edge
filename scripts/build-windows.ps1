@@ -1,0 +1,63 @@
+$ErrorActionPreference = "Stop"
+
+$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+Set-Location $Root
+
+$BuildVenv = Join-Path $Root ".build-venv"
+$Vendor = Join-Path $Root "packaging\windows\vendor"
+$WinSW = Join-Path $Vendor "TerraSatchEdgeService.exe"
+$WinSWUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
+
+Write-Host "[1/6] Preparing Python build environment"
+if (-not (Test-Path $BuildVenv)) {
+    py -3.12 -m venv $BuildVenv
+}
+$Python = Join-Path $BuildVenv "Scripts\python.exe"
+& $Python -m pip install --upgrade pip
+& $Python -m pip install -e ".[serial,usb,ui,build,dev]"
+
+Write-Host "[2/6] Running local tests"
+& $Python -m pytest
+
+Write-Host "[3/6] Building native Windows Edge bundle"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root "build")
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root "dist")
+& $Python -m PyInstaller `
+    --noconfirm `
+    --clean `
+    --onedir `
+    --name TerraSatchEdge `
+    --collect-all uvicorn `
+    --collect-all fastapi `
+    "packaging\entrypoints\edge_cli.py"
+
+Write-Host "[4/6] Staging WinSW service wrapper"
+New-Item -ItemType Directory -Force $Vendor | Out-Null
+if (-not (Test-Path $WinSW)) {
+    Invoke-WebRequest -Uri $WinSWUrl -OutFile $WinSW
+}
+
+Write-Host "[5/6] Locating Inno Setup compiler"
+$Candidates = @(
+    "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
+    "${env:ProgramFiles}\Inno Setup 7\ISCC.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+)
+$ISCC = $Candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $ISCC) {
+    throw "Inno Setup 6/7 is required to produce TerraSatch-Edge-Setup-x64.exe."
+}
+
+Write-Host "[6/6] Building TerraSatch Edge installer"
+New-Item -ItemType Directory -Force (Join-Path $Root "release") | Out-Null
+& $ISCC "packaging\windows\TerraSatchEdge.iss"
+
+$Installer = Join-Path $Root "release\TerraSatch-Edge-Setup-x64.exe"
+if (-not (Test-Path $Installer)) {
+    throw "Installer build completed without expected artifact: $Installer"
+}
+$Hash = Get-FileHash $Installer -Algorithm SHA256
+Write-Host ""
+Write-Host "Built: $Installer" -ForegroundColor Green
+Write-Host "SHA256: $($Hash.Hash)"

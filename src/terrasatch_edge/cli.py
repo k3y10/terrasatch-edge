@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import getpass
 import json
 import platform
 import socket
-import sys
+import time
 import uuid
+import webbrowser
+from datetime import UTC, datetime
 from typing import Annotated
 
 import typer
@@ -16,7 +17,16 @@ from rich.table import Table
 from . import __version__
 from .agent import EdgeAgent
 from .api import TerraSatchApiClient, TerraSatchApiError
-from .config import EdgeConfig, clear_api_key, get_paths, load_api_key, load_config, save_api_key, save_config
+from .config import (
+    EdgeConfig,
+    clear_api_key,
+    get_paths,
+    load_api_key,
+    load_config,
+    load_remote_config,
+    save_api_key,
+    save_config,
+)
 from .discovery import save_snapshot, scan_hardware
 from .doctor import run_doctor
 from .models import DeviceKind, HardwareDevice
@@ -62,6 +72,50 @@ def _device_table(devices: list[HardwareDevice]) -> Table:
     return table
 
 
+def _pair_device(
+    api_url: str,
+    node_name: str,
+    *,
+    open_browser: bool,
+) -> tuple[str, dict[str, object]]:
+    snapshot = scan_hardware(include_network=False)
+    client = TerraSatchApiClient(api_url)
+    pairing = client.start_pairing(
+        name=node_name,
+        hostname=snapshot.hostname,
+        platform_name=snapshot.platform,
+        architecture=snapshot.architecture,
+    )
+
+    console.print("\n[bold]Pair this Edge node[/bold]")
+    console.print(Panel.fit(f"[bold]{pairing.user_code}[/bold]", border_style="green"))
+    console.print(f"Open: [link={pairing.verification_url}]{pairing.verification_url}[/link]")
+    console.print(
+        "Approve the organization and site in TerraSatch Admin. "
+        "This window will continue automatically."
+    )
+
+    if open_browser:
+        try:
+            webbrowser.open(pairing.verification_url)
+        except Exception:
+            pass
+
+    deadline = pairing.expires_at
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=UTC)
+
+    while datetime.now(UTC) < deadline:
+        claim = client.claim_pairing(pairing.device_code)
+        if claim.status == "approved" and claim.token and claim.device:
+            return claim.token, claim.device.model_dump(mode="json")
+        if claim.status in {"expired", "claimed"}:
+            raise TerraSatchApiError(f"Pairing ended with status: {claim.status}")
+        time.sleep(max(2, pairing.interval_seconds))
+
+    raise TerraSatchApiError("Pairing code expired before it was approved")
+
+
 @app.command()
 def version() -> None:
     """Show the installed TerraSatch Edge version."""
@@ -102,17 +156,22 @@ def devices() -> None:
 @app.command()
 def setup(
     api_url: Annotated[str | None, typer.Option("--api-url", help="TerraSatch API base URL.")] = None,
-    api_key: Annotated[str | None, typer.Option("--api-key", help="Service API key; omit to enter securely.")] = None,
-    site_id: Annotated[str | None, typer.Option("--site-id", help="Preselect a TerraSatch site UUID.")] = None,
+    api_key: Annotated[
+        str | None,
+        typer.Option("--api-key", help="Advanced/manual service key fallback; pairing is preferred."),
+    ] = None,
+    site_id: Annotated[str | None, typer.Option("--site-id", help="Manual-key mode site UUID.")] = None,
     non_interactive: Annotated[
-        bool, typer.Option("--non-interactive", help="Fail instead of prompting for missing values.")
+        bool, typer.Option("--non-interactive", help="Do not prompt for editable values.")
+    ] = False,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the pairing URL without opening a browser.")
     ] = False,
 ) -> None:
-    """Run the TerraSatch Edge setup wizard."""
+    """Pair this computer to TerraSatch, scan hardware, and save its device credential."""
     _header()
     current = load_config()
     selected_api = (api_url or current.api_url).rstrip("/")
-
     if not non_interactive:
         selected_api = typer.prompt("TerraSatch API", default=selected_api).rstrip("/")
 
@@ -123,77 +182,66 @@ def setup(
         console.print(f"[green]✓[/green] API reachable: {health.get('status', 'ok')}")
     except TerraSatchApiError as exc:
         console.print(f"[red]✗[/red] API check failed: {exc}")
-        if non_interactive:
-            raise typer.Exit(2)
-        if not typer.confirm("Save configuration anyway?", default=False):
-            raise typer.Exit(2)
+        raise typer.Exit(2) from exc
 
     console.print("\n[bold]2. Scanning local hardware[/bold]")
     snapshot = scan_hardware(include_network=False)
     save_snapshot(snapshot)
     console.print(_device_table(snapshot.devices))
 
-    console.print("\n[bold]3. Authenticating[/bold]")
-    key = api_key or load_api_key()
-    if not key and not non_interactive:
-        key = getpass.getpass("TerraSatch service API key (input hidden): ").strip()
-    if not key:
-        console.print("[red]No API key supplied.[/red]")
-        raise typer.Exit(2)
-
-    client = TerraSatchApiClient(selected_api, key)
-    try:
-        identity = client.identity()
-        console.print("[green]✓[/green] API key accepted")
-        org_name = (
-            identity.raw.get("organization_name")
-            or identity.raw.get("organization", {}).get("name")
-            if isinstance(identity.raw.get("organization"), dict)
-            else None
-        )
-        if org_name:
-            console.print(f"Organization: [bold]{org_name}[/bold]")
-    except TerraSatchApiError as exc:
-        console.print(f"[red]✗ Authentication failed:[/red] {exc}")
-        raise typer.Exit(3) from exc
-
-    console.print("\n[bold]4. Selecting site[/bold]")
-    selected_site_id = site_id or current.site_id
-    selected_site_name = current.site_name
-    try:
-        sites = [site for site in client.sites() if site.enabled]
-    except TerraSatchApiError as exc:
-        sites = []
-        console.print(f"[yellow]Could not list sites:[/yellow] {exc}")
-
-    if selected_site_id:
-        match = next((site for site in sites if site.id == selected_site_id), None)
-        if match:
-            selected_site_name = match.name
-            console.print(f"Using site: [bold]{match.name}[/bold] ({match.id})")
-    elif sites and not non_interactive:
-        for index, site in enumerate(sites, start=1):
-            console.print(f"  {index}. {site.name} ({site.id})")
-        choice = typer.prompt("Select site", default="1")
-        try:
-            selected = sites[int(choice) - 1]
-        except (ValueError, IndexError):
-            console.print("[red]Invalid site selection.[/red]")
-            raise typer.Exit(2)
-        selected_site_id = selected.id
-        selected_site_name = selected.name
-    elif len(sites) == 1:
-        selected_site_id = sites[0].id
-        selected_site_name = sites[0].name
-    elif not selected_site_id:
-        console.print("[yellow]No site selected. Edge can be configured again after a site exists.[/yellow]")
-
     node_name = current.node_name or f"{socket.gethostname()}-edge"
     if not non_interactive:
         node_name = typer.prompt("Edge node name", default=node_name)
 
+    key = api_key
+    device_payload: dict[str, object] = {}
+    selected_site_id = site_id
+    selected_site_name = current.site_name
+
+    if not key:
+        console.print("\n[bold]3. Pairing device[/bold]")
+        try:
+            key, device_payload = _pair_device(
+                selected_api,
+                node_name,
+                open_browser=not no_browser,
+            )
+        except TerraSatchApiError as exc:
+            console.print(f"[red]✗ Pairing failed:[/red] {exc}")
+            raise typer.Exit(3) from exc
+        selected_site_id = str(device_payload.get("site_id") or "") or None
+        console.print("[green]✓[/green] Device approved and credential issued")
+    else:
+        console.print("\n[bold]3. Manual credential fallback[/bold]")
+        client = TerraSatchApiClient(selected_api, key)
+        try:
+            client.identity()
+        except TerraSatchApiError as exc:
+            console.print(f"[red]✗ Authentication failed:[/red] {exc}")
+            raise typer.Exit(3) from exc
+        if not selected_site_id:
+            sites = [site for site in client.sites() if site.enabled]
+            if len(sites) == 1:
+                selected_site_id = sites[0].id
+                selected_site_name = sites[0].name
+            elif sites and not non_interactive:
+                for index, site in enumerate(sites, start=1):
+                    console.print(f"  {index}. {site.name} ({site.id})")
+                choice = typer.prompt("Select site", default="1")
+                try:
+                    selected = sites[int(choice) - 1]
+                except (ValueError, IndexError):
+                    raise typer.Exit(2)
+                selected_site_id = selected.id
+                selected_site_name = selected.name
+
+    if not key:
+        raise typer.Exit(3)
+
     config = EdgeConfig(
         api_url=selected_api,
+        device_id=str(device_payload.get("id") or "") or current.device_id,
+        organization_id=str(device_payload.get("organization_id") or "") or current.organization_id,
         site_id=selected_site_id,
         site_name=selected_site_name,
         node_name=node_name,
@@ -203,10 +251,25 @@ def setup(
     config_path = save_config(config)
     credential_path = save_api_key(key)
 
+    console.print("\n[bold]4. Sending first heartbeat[/bold]")
+    paired_client = TerraSatchApiClient(selected_api, key)
+    try:
+        heartbeat = paired_client.heartbeat(snapshot)
+        console.print("[green]✓[/green] Hardware inventory synced")
+        device = heartbeat.get("device", {})
+        if isinstance(device, dict) and device.get("id"):
+            config.device_id = str(device["id"])
+            config.organization_id = str(device.get("organization_id") or config.organization_id or "") or None
+            config.site_id = str(device.get("site_id") or config.site_id or "") or None
+            save_config(config)
+    except TerraSatchApiError as exc:
+        console.print(f"[yellow]! Initial heartbeat not accepted:[/yellow] {exc}")
+
     console.print("\n[bold green]✓ TerraSatch Edge configured[/bold green]")
     console.print(f"Node: [bold]{node_name}[/bold]")
+    console.print(f"Device: {config.device_id or 'manual credential'}")
     console.print(f"API: {selected_api}")
-    console.print(f"Site: {selected_site_name or selected_site_id or 'not selected'}")
+    console.print(f"Site: {config.site_name or config.site_id or 'not selected'}")
     console.print(f"Config: {config_path}")
     console.print(f"Credentials: {credential_path}")
     console.print("\nNext: [bold]terrasatch-edge doctor[/bold]")
@@ -214,13 +277,13 @@ def setup(
 
 @app.command()
 def status(json_output: Annotated[bool, typer.Option("--json")] = False) -> None:
-    """Show local Edge configuration, API connectivity, and hardware status."""
+    """Show local Edge configuration, API connectivity, pairing and hardware status."""
     config = load_config()
     key = load_api_key()
     client = TerraSatchApiClient(config.api_url, key)
     api_online = False
     authenticated = False
-    details: dict[str, object] = {}
+    details: dict[str, object] = {"remote_config": load_remote_config()}
     try:
         details["health"] = client.health()
         api_online = True
@@ -228,14 +291,19 @@ def status(json_output: Annotated[bool, typer.Option("--json")] = False) -> None
         details["health_error"] = str(exc)
     if key and api_online:
         try:
-            details["identity"] = client.identity().raw
+            details["edge"] = client.edge_me().model_dump(mode="json")
             authenticated = True
         except TerraSatchApiError as exc:
-            details["auth_error"] = str(exc)
+            try:
+                details["identity"] = client.identity().raw
+                authenticated = True
+            except TerraSatchApiError:
+                details["auth_error"] = str(exc)
 
     snapshot = scan_hardware(include_network=False)
     result = {
         "version": __version__,
+        "device_id": config.device_id,
         "node_name": config.node_name,
         "hostname": snapshot.hostname,
         "api_url": config.api_url,
@@ -252,6 +320,7 @@ def status(json_output: Annotated[bool, typer.Option("--json")] = False) -> None
 
     _header()
     console.print(f"Node: [bold]{config.node_name or snapshot.hostname}[/bold]")
+    console.print(f"Device ID: {config.device_id or '[yellow]not paired[/yellow]'}")
     console.print(f"API: {'[green]ONLINE[/green]' if api_online else '[red]OFFLINE[/red]'} · {config.api_url}")
     console.print(f"Auth: {'[green]OK[/green]' if authenticated else '[yellow]NOT READY[/yellow]'}")
     console.print(f"Site: {config.site_name or config.site_id or '[yellow]not selected[/yellow]'}")
@@ -293,10 +362,10 @@ def ingest_text(
     key = load_api_key()
     target_site = site_id or config.site_id
     if not key:
-        console.print("[red]No API key configured. Run `terrasatch-edge setup`.[/red]")
+        console.print("[red]No Edge credential configured. Run `terrasatch-edge setup`.[/red]")
         raise typer.Exit(2)
     if not target_site:
-        console.print("[red]No site selected. Run setup again or use --site-id.[/red]")
+        console.print("[red]No site selected. Pair Edge again or use --site-id.[/red]")
         raise typer.Exit(2)
     message_id = source_message_id or f"edge-{platform.node()}-{uuid.uuid4()}"
     client = TerraSatchApiClient(config.api_url, key)
@@ -317,7 +386,7 @@ def ingest_text(
 
 @app.command()
 def run(once: Annotated[bool, typer.Option("--once", help="Run one agent cycle and exit.")] = False) -> None:
-    """Run the local Edge agent and persist hardware snapshots while checking API health."""
+    """Run Edge heartbeats, hardware inventory sync, and remote configuration fetches."""
     agent = EdgeAgent()
     if once:
         ok, message = agent.tick()
@@ -342,7 +411,7 @@ def ui(
     try:
         import uvicorn
     except ImportError as exc:
-        console.print("[red]UI dependencies missing.[/red] Install with: pip install 'terrasatch-edge[ui]'")
+        console.print("[red]UI dependencies missing.[/red]")
         raise typer.Exit(2) from exc
     from .local_ui import build_app
 
@@ -352,9 +421,9 @@ def ui(
 
 @app.command("logout")
 def logout() -> None:
-    """Remove the locally stored TerraSatch Edge API key."""
+    """Remove the locally stored TerraSatch Edge device credential."""
     clear_api_key()
-    console.print("[green]Local TerraSatch Edge credentials removed.[/green]")
+    console.print("[green]Local TerraSatch Edge credential removed.[/green]")
 
 
 @app.command("paths")
@@ -364,6 +433,8 @@ def show_paths() -> None:
     console.print(f"Config: {paths.config_file}")
     console.print(f"Credentials: {paths.credentials_file}")
     console.print(f"Snapshot: {paths.snapshot_file}")
+    console.print(f"Remote config: {paths.remote_config_file}")
+    console.print(f"Logs: {paths.log_dir}")
 
 
 if __name__ == "__main__":

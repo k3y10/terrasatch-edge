@@ -4,7 +4,8 @@ from typing import Any
 
 import httpx
 
-from .models import ApiIdentity, SiteSummary
+from . import __version__
+from .models import ApiIdentity, EdgeDevice, PairingClaim, PairingStart, SiteSummary, SystemSnapshot
 
 
 class TerraSatchApiError(RuntimeError):
@@ -18,7 +19,7 @@ class TerraSatchApiClient:
         self.timeout = timeout
 
     def _headers(self) -> dict[str, str]:
-        headers = {"User-Agent": "terrasatch-edge/0.1.0"}
+        headers = {"User-Agent": f"terrasatch-edge/{__version__}"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
@@ -80,6 +81,66 @@ class TerraSatchApiClient:
                     )
                 )
         return sites
+
+    def start_pairing(
+        self,
+        *,
+        name: str,
+        hostname: str,
+        platform_name: str,
+        architecture: str,
+    ) -> PairingStart:
+        response = self._request(
+            "POST",
+            "/api/v1/edge/pairings",
+            json={
+                "name": name,
+                "hostname": hostname,
+                "platform": platform_name,
+                "architecture": architecture,
+                "agent_version": __version__,
+            },
+        )
+        return PairingStart.model_validate(response.json())
+
+    def claim_pairing(self, device_code: str) -> PairingClaim:
+        response = self._request(
+            "POST",
+            "/api/v1/edge/pairings/token",
+            json={"device_code": device_code},
+        )
+        return PairingClaim.model_validate(response.json())
+
+    def edge_me(self) -> EdgeDevice:
+        return EdgeDevice.model_validate(self._request("GET", "/api/v1/edge/me").json())
+
+    def heartbeat(self, snapshot: SystemSnapshot) -> dict[str, Any]:
+        capabilities = sorted(
+            {
+                capability
+                for device in snapshot.devices
+                for capability in device.capabilities
+            }
+        )
+        inventory = [device.model_dump(mode="json") for device in snapshot.devices]
+        response = self._request(
+            "POST",
+            "/api/v1/edge/heartbeat",
+            json={
+                "agent_version": __version__,
+                "hardware_inventory": inventory,
+                "capabilities": capabilities,
+            },
+        )
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {"data": payload}
+
+    def remote_config(self) -> dict[str, Any]:
+        response = self._request("GET", "/api/v1/edge/config")
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise TerraSatchApiError("Unexpected /api/v1/edge/config response")
+        return payload
 
     def ingest_text(
         self,

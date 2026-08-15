@@ -58,6 +58,39 @@ class SiteSummary(BaseModel):
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
+class PairingStart(BaseModel):
+    pairing_id: str
+    device_code: str
+    user_code: str
+    verification_url: str
+    expires_at: datetime
+    interval_seconds: int = 5
+
+
+class EdgeDevice(BaseModel):
+    id: str
+    organization_id: str
+    site_id: str
+    name: str
+    hostname: str | None = None
+    platform: str | None = None
+    architecture: str | None = None
+    agent_version: str | None = None
+    hardware_inventory: list[dict[str, Any]] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    remote_config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+    last_seen_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PairingClaim(BaseModel):
+    status: str
+    token: str | None = None
+    device: EdgeDevice | None = None
+
+
 class EdgeStatus(BaseModel):
     configured: bool
     api_url: str
