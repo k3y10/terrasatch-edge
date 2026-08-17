@@ -1,5 +1,5 @@
 #define MyAppName "TerraSatch Edge"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "0.2.1"
 #define MyAppPublisher "TerraSatch"
 #define MyAppExeName "TerraSatchEdge.exe"
 #define MyIconFile "assets\TerraSatchEdge.ico"
