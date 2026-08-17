@@ -20,3 +20,7 @@ Thumbs.db
 packaging/windows/vendor/TerraSatchEdgeService.exe
 packaging/windows/vendor/rtl-sdr/*
 !packaging/windows/vendor/rtl-sdr/README.md
+
+# Generated Windows branding artifact. The build derives this from the approved
+# Satchy artwork or an explicit TERRASATCH_EDGE_ICON override.
+packaging/windows/assets/TerraSatchEdge.ico
