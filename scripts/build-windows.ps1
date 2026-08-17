@@ -37,7 +37,9 @@ if (-not (Test-Path $IconFile)) {
     }
 
     $IconSource = Join-Path $env:TEMP "TerraSatch-Satchy-icon-source.png"
+    $IconBuilderPath = Join-Path $env:TEMP "TerraSatch-build-satchy-icon.py"
     Remove-Item $IconSource -Force -ErrorAction SilentlyContinue
+    Remove-Item $IconBuilderPath -Force -ErrorAction SilentlyContinue
 
     if ($SatchySource -match '^https?://') {
         Write-Host "Downloading approved Satchy artwork: $SatchySource"
@@ -47,6 +49,10 @@ if (-not (Test-Path $IconFile)) {
         Write-Host "Using local Satchy artwork: $SatchySource"
     } else {
         throw "Satchy icon source was not found: $SatchySource"
+    }
+
+    if (-not (Test-Path $IconSource) -or (Get-Item $IconSource).Length -le 0) {
+        throw "Satchy artwork could not be staged from: $SatchySource"
     }
 
     $IconBuilder = @'
@@ -78,8 +84,25 @@ canvas.save(
 )
 '@
 
-    & $Python -c $IconBuilder $IconSource $IconFile
-    Remove-Item $IconSource -Force -ErrorAction SilentlyContinue
+    Set-Content -Path $IconBuilderPath -Value $IconBuilder -Encoding UTF8
+
+    try {
+        & $Python $IconBuilderPath $IconSource $IconFile
+        if ($LASTEXITCODE -ne 0) {
+            throw "Satchy icon conversion failed with exit code $LASTEXITCODE."
+        }
+    } finally {
+        Remove-Item $IconBuilderPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $IconSource -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not (Test-Path $IconFile)) {
+        throw "TerraSatchEdge.ico was not created. Branded Windows release builds require the Satchy icon."
+    }
+    if ((Get-Item $IconFile).Length -le 0) {
+        throw "TerraSatchEdge.ico is empty. Branded Windows release builds require a valid icon."
+    }
+
     Write-Host "Generated TerraSatch Edge Satchy icon: $IconFile" -ForegroundColor Green
 }
 
