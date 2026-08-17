@@ -33,8 +33,8 @@ dev = [
 ]
 
 [project.scripts]
-terrasatch-edge = "terrasatch_edge.cli:app"
-tsedge = "terrasatch_edge.cli:app"
+terrasatch-edge = "terrasatch_edge.entrypoint:main"
+tsedge = "terrasatch_edge.entrypoint:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/terrasatch_edge"]
