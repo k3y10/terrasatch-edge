@@ -24,16 +24,21 @@ UninstallDisplayIcon={app}\Edge\{#MyAppExeName}
 [Dirs]
 Name: "{commonappdata}\TerraSatch\Edge"; Permissions: admins-full system-full users-modify
 Name: "{commonappdata}\TerraSatch\Edge\state"; Permissions: admins-full system-full users-modify
+Name: "{commonappdata}\TerraSatch\Edge\state\logs"; Permissions: admins-full system-full users-modify
 
 [Files]
 Source: "..\..\dist\TerraSatchEdge\*"; DestDir: "{app}\Edge"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows\vendor\TerraSatchEdgeService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows\TerraSatchEdgeService.xml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\windows\TerraSatchEdgeSetup.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\windows\TerraSatchEdgeConsole.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\TerraSatch Edge Status"; Filename: "{app}\Edge\TerraSatchEdge.exe"; Parameters: "status"
-Name: "{group}\TerraSatch Edge Setup"; Filename: "{app}\Edge\TerraSatchEdge.exe"; Parameters: "setup"
-Name: "{commondesktop}\TerraSatch Edge"; Filename: "{app}\Edge\TerraSatchEdge.exe"; Parameters: "status"; Tasks: desktopicon
+Name: "{group}\TerraSatch Edge Status"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"
+Name: "{group}\TerraSatch Edge Diagnostics"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command doctor"
+Name: "{group}\TerraSatch Edge Hardware Scan"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command scan"
+Name: "{group}\TerraSatch Edge Setup"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeSetup.ps1"""
+Name: "{commondesktop}\TerraSatch Edge"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
@@ -41,7 +46,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [Run]
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "install"; Flags: runhidden waituntilterminated; StatusMsg: "Installing TerraSatch Edge service..."
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "start"; Flags: runhidden waituntilterminated; StatusMsg: "Starting TerraSatch Edge service..."
-Filename: "{app}\Edge\TerraSatchEdge.exe"; Parameters: "setup"; Description: "Pair and configure TerraSatch Edge"; Flags: postinstall nowait skipifsilent
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeSetup.ps1"""; Description: "Pair and configure TerraSatch Edge"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopTerraSatchEdge"
