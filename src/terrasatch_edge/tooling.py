@@ -54,10 +54,14 @@ def _tool_dirs() -> list[Path]:
 
 
 def find_executable(name: str) -> Path | None:
-    """Resolve a helper from PATH or TerraSatch's bundled tool directories."""
-    system_match = shutil.which(name)
-    if system_match:
-        return Path(system_match)
+    """Resolve a helper from an explicit/bundled TerraSatch location, then PATH.
+
+    ``TERRASATCH_EDGE_TOOLS`` is an operator override and must win over a
+    system-installed binary. Bundled TerraSatch helper directories are checked
+    next so packaged runtimes remain deterministic. System ``PATH`` is the
+    fallback for native Linux/macOS installations such as distro/Homebrew
+    ``rtl-sdr`` packages.
+    """
 
     candidates = [name]
     if os.name == "nt" and not name.lower().endswith(".exe"):
@@ -68,6 +72,10 @@ def find_executable(name: str) -> Path | None:
             path = directory / candidate
             if path.is_file():
                 return path
+
+    system_match = shutil.which(name)
+    if system_match:
+        return Path(system_match)
     return None
 
 
@@ -152,9 +160,9 @@ def probe_rtl_sdr(
         if "no supported devices found" in lower or "no devices found" in lower:
             detail = "RTL-SDR runtime is installed but no compatible receiver could be opened"
         elif "usb_claim_interface" in lower or "access denied" in lower:
-            detail = "RTL-SDR runtime found the receiver but Windows could not claim its USB interface"
+            detail = "RTL-SDR runtime found the receiver but could not claim its USB interface"
         elif "failed to open rtlsdr device" in lower:
-            detail = "RTL-SDR found the receiver but could not open it; verify WinUSB on Interface 0 and close other SDR apps"
+            detail = "RTL-SDR found the receiver but could not open it; close other SDR apps and verify device permissions/driver access"
         else:
             detail = f"RTL-SDR receive probe failed with exit code {result.returncode}"
 
