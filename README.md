@@ -17,7 +17,7 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
                        |
               api.terrasatch.com
                        |
-                  TerraListen
+                  TerraListen / Satchy
 ```
 
 ## v0.2 capabilities
@@ -28,6 +28,8 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
 - device-scoped credential provisioning
 - hardware discovery and classification
 - Nooelec / RTL-SDR recognition
+- optional bundled RTL-SDR runtime discovery
+- finite receive-only IQ readiness probe when `rtl_sdr` is available
 - GPS/GNSS, serial, USB audio and network inventory
 - periodic Edge heartbeat and hardware inventory sync
 - remote Edge configuration retrieval
@@ -91,6 +93,14 @@ produces:
 release\TerraSatch-Edge-Setup-x64.exe
 ```
 
+The Windows installer now keeps first-run setup and Start Menu diagnostics visible until the operator closes them. Setup transcripts are written to:
+
+```text
+C:\ProgramData\TerraSatch\Edge\state\logs
+```
+
+A reviewed RTL-SDR Windows runtime can be embedded by setting `TERRASATCH_RTLSDR_BUNDLE` before the build. Edge then finds the runtime inside its own `tools\rtl-sdr` directory without requiring the target user to modify PATH.
+
 macOS:
 
 ```bash
@@ -107,7 +117,9 @@ PyInstaller builds must be run on the operating system being packaged. The targe
 
 ## Nooelec status
 
-v0.2 can discover and report an RTL-SDR / Nooelec receiver and its capabilities. Direct RF capture, NFM/FM demodulation, squelch/VAD, radio audio segmentation and TerraListen transcription are the next adapter phase.
+v0.2 can discover and report an RTL-SDR / Nooelec receiver and its capabilities. When a trusted `rtl_sdr` runtime is bundled or installed, `terrasatch-edge doctor` also performs a small finite IQ read to prove that Edge can actually open and receive from the hardware.
+
+Continuous RF capture, NFM/FM demodulation, squelch/VAD, radio audio segmentation and TerraListen/Satchy transcription remain the next adapter phase.
 
 ## Security
 
