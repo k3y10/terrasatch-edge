@@ -2,6 +2,12 @@ $ErrorActionPreference = "Continue"
 
 $EdgeExe = Join-Path $PSScriptRoot "Edge\TerraSatchEdge.exe"
 $LogDir = Join-Path $env:ProgramData "TerraSatch\Edge\state\logs"
+$ProductionApiUrl = "https://api.terrasatch.com"
+$SelectedApiUrl = $ProductionApiUrl
+if (-not [string]::IsNullOrWhiteSpace($env:TERRASATCH_EDGE_API_URL)) {
+    $SelectedApiUrl = $env:TERRASATCH_EDGE_API_URL.Trim().TrimEnd('/')
+}
+
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 
 $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -17,12 +23,23 @@ try {
 
 Write-Host "TerraSatch Edge" -ForegroundColor Green
 Write-Host "Checking this device registration..."
+Write-Host "API target: $SelectedApiUrl"
 Write-Host ""
 
 if (-not (Test-Path $EdgeExe)) {
     Write-Host "TerraSatch Edge executable was not found at: $EdgeExe" -ForegroundColor Red
     $ExitCode = 2
 } else {
+    try {
+        $VersionText = (& $EdgeExe --version 2>$null | Out-String).Trim()
+        if ($VersionText) {
+            Write-Host "Runtime: $VersionText"
+            Write-Host ""
+        }
+    } catch {
+        Write-Host "Runtime version could not be read: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
     $Registered = $false
     $Status = $null
 
@@ -50,6 +67,13 @@ if (-not (Test-Path $EdgeExe)) {
         Write-Host "Device: $($Status.device_id)"
         Write-Host "Site: $DisplaySite"
         Write-Host "API: $($Status.api_url)"
+        if (-not [string]::IsNullOrWhiteSpace([string]$Status.api_url) -and
+            ([string]$Status.api_url).TrimEnd('/') -ne $SelectedApiUrl) {
+            Write-Host "This saved registration targets a different API than the current installer environment." -ForegroundColor Yellow
+            Write-Host "Saved: $($Status.api_url)" -ForegroundColor Yellow
+            Write-Host "Installer environment: $SelectedApiUrl" -ForegroundColor Yellow
+            Write-Host "The existing registration is being preserved. Run TerraSatch Edge Setup again after changing environments." -ForegroundColor Yellow
+        }
         Write-Host ""
         Write-Host "This Edge node is already paired. Existing registration was preserved."
         $ExitCode = 0
@@ -57,7 +81,7 @@ if (-not (Test-Path $EdgeExe)) {
         Write-Host "This device is new, unregistered, or its saved credential is no longer valid." -ForegroundColor Yellow
         Write-Host "Starting TerraSatch Edge pairing..."
         Write-Host ""
-        & $EdgeExe setup
+        & $EdgeExe setup --api-url $SelectedApiUrl
         $ExitCode = $LASTEXITCODE
     }
 }
