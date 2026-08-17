@@ -38,16 +38,46 @@ if (-not (Test-Path $WinSW)) {
 }
 
 Write-Host "[5/6] Locating Inno Setup compiler"
-$Candidates = @(
+$Candidates = @()
+
+$ISCCCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+if ($ISCCCommand) {
+    $Candidates += $ISCCCommand.Source
+}
+
+$Candidates += @(
     "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
     "${env:ProgramFiles}\Inno Setup 7\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+    "${env:LOCALAPPDATA}\Programs\Inno Setup 7\ISCC.exe",
+    "${env:LOCALAPPDATA}\Programs\Inno Setup 6\ISCC.exe",
+    "${env:LOCALAPPDATA}\Inno Setup 7\ISCC.exe",
+    "${env:LOCALAPPDATA}\Inno Setup 6\ISCC.exe"
 )
-$ISCC = $Candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-if (-not $ISCC) {
-    throw "Inno Setup 6/7 is required to produce TerraSatch-Edge-Setup-x64.exe."
+
+$UninstallRoots = @(
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+)
+foreach ($RegistryPath in $UninstallRoots) {
+    Get-ItemProperty $RegistryPath -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like "Inno Setup*" -and $_.InstallLocation } |
+        ForEach-Object {
+            $Candidates += (Join-Path $_.InstallLocation "ISCC.exe")
+        }
 }
+
+$ISCC = $Candidates |
+    Where-Object { $_ -and (Test-Path $_) } |
+    Select-Object -Unique |
+    Select-Object -First 1
+
+if (-not $ISCC) {
+    throw "Inno Setup is installed but ISCC.exe could not be located. Run: Get-ChildItem `$env:LOCALAPPDATA,`${env:ProgramFiles},`${env:ProgramFiles(x86)} -Filter ISCC.exe -Recurse -ErrorAction SilentlyContinue"
+}
+Write-Host "Using Inno Setup compiler: $ISCC"
 
 Write-Host "[6/6] Building TerraSatch Edge installer"
 New-Item -ItemType Directory -Force (Join-Path $Root "release") | Out-Null
