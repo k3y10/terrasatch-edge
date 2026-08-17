@@ -1,0 +1,32 @@
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_console_scripts_use_shared_version_aware_entrypoint() -> None:
+    payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    scripts = payload["project"]["scripts"]
+
+    assert scripts["terrasatch-edge"] == "terrasatch_edge.entrypoint:main"
+    assert scripts["tsedge"] == "terrasatch_edge.entrypoint:main"
+
+
+def test_windows_setup_uses_production_api_environment_contract() -> None:
+    script = (ROOT / "packaging" / "windows" / "TerraSatchEdgeSetup.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert '$ProductionApiUrl = "https://api.terrasatch.com"' in script
+    assert "$env:TERRASATCH_EDGE_API_URL" in script
+    assert "setup --api-url $SelectedApiUrl" in script
+    assert "$EdgeExe --version" in script
+
+
+def test_edge_env_example_points_at_production_https() -> None:
+    text = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+    assert "TERRASATCH_EDGE_API_URL=https://api.terrasatch.com" in text
