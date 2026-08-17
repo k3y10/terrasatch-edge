@@ -20,6 +20,8 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\Edge\{#MyAppExeName}
+CloseApplications=yes
+RestartApplications=no
 
 [Dirs]
 Name: "{commonappdata}\TerraSatch\Edge"; Permissions: admins-full system-full users-modify
@@ -51,3 +53,43 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 [UninstallRun]
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopTerraSatchEdge"
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveTerraSatchEdge"
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  WrapperPath: String;
+  EdgeExePath: String;
+begin
+  Result := '';
+  NeedsRestart := False;
+
+  { Stop the currently installed service before [Files] attempts to replace
+    TerraSatchEdge.exe. The post-copy service setup script will refresh and
+    restart the service using the newly installed files. }
+  WrapperPath := ExpandConstant('{app}\TerraSatchEdgeService.exe');
+  if FileExists(WrapperPath) then
+  begin
+    Log('Stopping existing TerraSatch Edge service before upgrade.');
+    Exec(WrapperPath, 'stop', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end
+  else
+  begin
+    { Fallback for an older/partial installation where the wrapper path is
+      missing but the Windows service registration still exists. }
+    Exec(ExpandConstant('{sys}\sc.exe'), 'stop TerraSatchEdge', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode);
+  end;
+
+  Sleep(1000);
+
+  { Also close any interactive status/setup process using the same executable.
+    This prevents an open console from retaining a file lock during upgrade. }
+  EdgeExePath := ExpandConstant('{app}\Edge\TerraSatchEdge.exe');
+  if FileExists(EdgeExePath) then
+  begin
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM TerraSatchEdge.exe', '',
+      SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(500);
+  end;
+end;
