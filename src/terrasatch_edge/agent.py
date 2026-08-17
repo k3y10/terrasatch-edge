@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .api import TerraSatchApiClient, TerraSatchApiError
-from .config import load_api_key, load_config, save_remote_config
+from .config import EdgeConfig, load_api_key, load_config, save_remote_config
 from .discovery import save_snapshot, scan_hardware
 
 
@@ -25,7 +25,17 @@ class EdgeAgent:
     def stop(self, *_args: object) -> None:
         self.state.running = False
 
+    def _reload_registration(self) -> None:
+        """Pick up pairing/config changes without requiring a service restart."""
+        config: EdgeConfig = load_config()
+        api_key = load_api_key()
+        if config.api_url != self.config.api_url or api_key != self.api_key:
+            self.client = TerraSatchApiClient(config.api_url, api_key)
+        self.config = config
+        self.api_key = api_key
+
     def tick(self) -> tuple[bool, str]:
+        self._reload_registration()
         snapshot = scan_hardware(include_network=True)
         save_snapshot(snapshot)
         if not self.api_key:
