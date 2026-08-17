@@ -5,8 +5,21 @@ Set-Location $Root
 
 $BuildVenv = Join-Path $Root ".build-venv"
 $Vendor = Join-Path $Root "packaging\windows\vendor"
+$Assets = Join-Path $Root "packaging\windows\assets"
+$IconFile = Join-Path $Assets "TerraSatchEdge.ico"
 $WinSW = Join-Path $Vendor "TerraSatchEdgeService.exe"
 $WinSWUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
+
+New-Item -ItemType Directory -Force $Assets | Out-Null
+
+if ($env:TERRASATCH_EDGE_ICON) {
+    $SuppliedIcon = (Resolve-Path $env:TERRASATCH_EDGE_ICON).Path
+    if ([System.IO.Path]::GetExtension($SuppliedIcon).ToLowerInvariant() -ne ".ico") {
+        throw "TERRASATCH_EDGE_ICON must point to a Windows .ico file."
+    }
+    Copy-Item $SuppliedIcon $IconFile -Force
+    Write-Host "Staged TerraSatch icon from: $SuppliedIcon" -ForegroundColor Green
+}
 
 Write-Host "[1/7] Preparing Python build environment"
 if (-not (Test-Path $BuildVenv)) {
@@ -22,14 +35,24 @@ Write-Host "[2/7] Running local tests"
 Write-Host "[3/7] Building native Windows Edge bundle"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root "build")
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root "dist")
-& $Python -m PyInstaller `
-    --noconfirm `
-    --clean `
-    --onedir `
-    --name TerraSatchEdge `
-    --collect-all uvicorn `
-    --collect-all fastapi `
-    "packaging\entrypoints\edge_cli.py"
+
+$PyInstallerArgs = @(
+    "--noconfirm",
+    "--clean",
+    "--onedir",
+    "--name", "TerraSatchEdge",
+    "--collect-all", "uvicorn",
+    "--collect-all", "fastapi"
+)
+if (Test-Path $IconFile) {
+    $PyInstallerArgs += @("--icon", $IconFile)
+    Write-Host "Using TerraSatch Edge icon: $IconFile" -ForegroundColor Green
+} else {
+    Write-Host "No TerraSatchEdge.ico staged; installer will use default Windows executable icons." -ForegroundColor Yellow
+    Write-Host "Set TERRASATCH_EDGE_ICON to a reviewed .ico file before building to brand the EXE and installer."
+}
+$PyInstallerArgs += "packaging\entrypoints\edge_cli.py"
+& $Python -m PyInstaller @PyInstallerArgs
 
 Write-Host "[4/7] Staging optional RTL-SDR runtime"
 $VendorRtlSdr = Join-Path $Vendor "rtl-sdr"
