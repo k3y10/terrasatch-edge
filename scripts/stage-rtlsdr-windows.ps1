@@ -37,6 +37,7 @@ if (-not (Test-Path $RtlSdrExe)) {
 
 $PackageLine = (& $Bash -lc 'pacman -Q mingw-w64-ucrt-x86_64-rtl-sdr').Trim()
 $PackageVersion = ($PackageLine -split '\s+')[-1]
+$UpstreamVersion = ($PackageVersion -split '-')[0]
 
 $LddOutput = & $Bash -lc 'PATH=/ucrt64/bin:/usr/bin ldd /ucrt64/bin/rtl_sdr.exe'
 $DependencyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -74,7 +75,7 @@ foreach ($Name in $DependencyNames) {
     }
 }
 
-$LicenseUrl = "https://raw.githubusercontent.com/osmocom/rtl-sdr/v2.0.2/COPYING"
+$LicenseUrl = "https://raw.githubusercontent.com/osmocom/rtl-sdr/v$UpstreamVersion/COPYING"
 try {
     Invoke-WebRequest -Uri $LicenseUrl -OutFile (Join-Path $Target "COPYING.rtl-sdr.txt")
 } catch {
@@ -89,7 +90,7 @@ MSYS2 package version: $PackageVersion
 MSYS2 package repository: ucrt64
 Upstream project: https://gitea.osmocom.org/sdr/rtl-sdr/
 Upstream GitHub mirror: https://github.com/osmocom/rtl-sdr
-Upstream release family: v2.0.2
+Upstream release family: v$UpstreamVersion
 License: GPL-2.0-or-later
 
 This folder was staged locally from the installed MSYS2 package. Review redistribution and source/license obligations before publishing the containing TerraSatch installer.
