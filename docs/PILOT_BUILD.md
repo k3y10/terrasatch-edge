@@ -52,7 +52,7 @@ The installer:
 
 PnP detection and the radio runtime are separate checks. Windows may identify a Nooelec NESDR correctly even when the command-line RTL-SDR runtime is not present.
 
-Edge now looks for `rtl_sdr` in:
+Edge looks for `rtl_sdr` in:
 
 1. the normal system `PATH`
 2. `TERRASATCH_EDGE_TOOLS`
@@ -61,30 +61,51 @@ Edge now looks for `rtl_sdr` in:
 
 When an RTL-SDR/Nooelec is detected and `rtl_sdr` is available, `terrasatch-edge doctor` performs a finite receive-only IQ probe. The probe tunes to 100 MHz, reads a small sample, writes it to a temporary file, and deletes it when complete. This verifies that the runtime can actually open and read the receiver rather than only seeing the Windows PnP record.
 
-### Bundle a trusted Windows runtime
+### Recommended pilot staging path: MSYS2 UCRT64 package
 
-The build does not download an arbitrary third-party RTL-SDR binary. Supply a reviewed runtime explicitly:
+For a repeatable Windows pilot build, use the packaged UCRT64 rtl-sdr runtime from MSYS2 rather than downloading an arbitrary binary archive.
+
+Install MSYS2 once on the build machine:
+
+```powershell
+winget install -e --id MSYS2.MSYS2
+```
+
+Then from the TerraSatch Edge repository:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\stage-rtlsdr-windows.ps1
+.\scripts\build-windows.ps1
+```
+
+`stage-rtlsdr-windows.ps1`:
+
+- installs `mingw-w64-ucrt-x86_64-rtl-sdr` through MSYS2 `pacman`
+- locates `rtl_sdr.exe`
+- uses `ldd` to discover the UCRT64 DLL dependencies required by the executable
+- copies the RTL-SDR utilities + resolved DLLs into `packaging\windows\vendor\rtl-sdr`
+- records the installed package version and upstream provenance
+- attempts to include the matching upstream `COPYING` file
+
+The normal Windows build then detects that vendor folder automatically and embeds it in:
+
+```text
+C:\Program Files\TerraSatch\Edge\Edge\tools\rtl-sdr\
+```
+
+### Alternate reviewed runtime
+
+A different reviewed runtime can be supplied explicitly:
 
 ```powershell
 $env:TERRASATCH_RTLSDR_BUNDLE = "C:\path\to\trusted\rtl-sdr-runtime"
 .\scripts\build-windows.ps1
 ```
 
-The folder must contain `rtl_sdr.exe` and every DLL it requires. The full folder is copied into the native Edge bundle at:
+The folder must contain `rtl_sdr.exe` and every DLL it requires.
 
-```text
-Edge\tools\rtl-sdr\
-```
-
-Alternatively, place the reviewed files in:
-
-```text
-packaging\windows\vendor\rtl-sdr\
-```
-
-before building.
-
-The upstream Osmocom rtl-sdr project is GPL-licensed. Review and satisfy the applicable redistribution/source obligations before shipping a TerraSatch installer that embeds those binaries.
+The upstream Osmocom rtl-sdr project is GPL-licensed. Review and satisfy the applicable redistribution/source obligations before shipping a TerraSatch installer that embeds those binaries. The locally staged vendor binaries are ignored by Git by default so the repository does not accidentally publish them.
 
 ## Windows pilot verification
 
