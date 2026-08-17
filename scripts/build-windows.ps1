@@ -8,7 +8,7 @@ $Vendor = Join-Path $Root "packaging\windows\vendor"
 $WinSW = Join-Path $Vendor "TerraSatchEdgeService.exe"
 $WinSWUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
 
-Write-Host "[1/6] Preparing Python build environment"
+Write-Host "[1/7] Preparing Python build environment"
 if (-not (Test-Path $BuildVenv)) {
     py -3.12 -m venv $BuildVenv
 }
@@ -16,10 +16,10 @@ $Python = Join-Path $BuildVenv "Scripts\python.exe"
 & $Python -m pip install --upgrade pip
 & $Python -m pip install -e ".[serial,usb,ui,build,dev]"
 
-Write-Host "[2/6] Running local tests"
+Write-Host "[2/7] Running local tests"
 & $Python -m pytest
 
-Write-Host "[3/6] Building native Windows Edge bundle"
+Write-Host "[3/7] Building native Windows Edge bundle"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root "build")
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root "dist")
 & $Python -m PyInstaller `
@@ -31,13 +31,36 @@ Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root "dist
     --collect-all fastapi `
     "packaging\entrypoints\edge_cli.py"
 
-Write-Host "[4/6] Staging WinSW service wrapper"
+Write-Host "[4/7] Staging optional RTL-SDR runtime"
+$VendorRtlSdr = Join-Path $Vendor "rtl-sdr"
+$RtlSdrBundle = $env:TERRASATCH_RTLSDR_BUNDLE
+if (-not $RtlSdrBundle -and (Test-Path (Join-Path $VendorRtlSdr "rtl_sdr.exe"))) {
+    $RtlSdrBundle = $VendorRtlSdr
+}
+
+if ($RtlSdrBundle) {
+    $RtlSdrBundle = (Resolve-Path $RtlSdrBundle).Path
+    $RtlSdrExe = Join-Path $RtlSdrBundle "rtl_sdr.exe"
+    if (-not (Test-Path $RtlSdrExe)) {
+        throw "TERRASATCH_RTLSDR_BUNDLE must point to a folder containing rtl_sdr.exe."
+    }
+    $TargetTools = Join-Path $Root "dist\TerraSatchEdge\tools\rtl-sdr"
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $TargetTools
+    New-Item -ItemType Directory -Force $TargetTools | Out-Null
+    Copy-Item -Path (Join-Path $RtlSdrBundle "*") -Destination $TargetTools -Recurse -Force
+    Write-Host "Bundled RTL-SDR runtime from: $RtlSdrBundle" -ForegroundColor Green
+} else {
+    Write-Host "No RTL-SDR runtime bundle supplied; PnP detection will work but active IQ probing will remain unavailable." -ForegroundColor Yellow
+    Write-Host "To bundle one, set TERRASATCH_RTLSDR_BUNDLE to a trusted folder containing rtl_sdr.exe and its DLLs."
+}
+
+Write-Host "[5/7] Staging WinSW service wrapper"
 New-Item -ItemType Directory -Force $Vendor | Out-Null
 if (-not (Test-Path $WinSW)) {
     Invoke-WebRequest -Uri $WinSWUrl -OutFile $WinSW
 }
 
-Write-Host "[5/6] Locating Inno Setup compiler"
+Write-Host "[6/7] Locating Inno Setup compiler"
 $Candidates = @()
 
 $ISCCCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
@@ -79,7 +102,7 @@ if (-not $ISCC) {
 }
 Write-Host "Using Inno Setup compiler: $ISCC"
 
-Write-Host "[6/6] Building TerraSatch Edge installer"
+Write-Host "[7/7] Building TerraSatch Edge installer"
 New-Item -ItemType Directory -Force (Join-Path $Root "release") | Out-Null
 & $ISCC "packaging\windows\TerraSatchEdge.iss"
 
