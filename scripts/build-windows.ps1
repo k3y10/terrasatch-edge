@@ -9,6 +9,7 @@ $Assets = Join-Path $Root "packaging\windows\assets"
 $IconFile = Join-Path $Assets "TerraSatchEdge.ico"
 $WinSW = Join-Path $Vendor "TerraSatchEdgeService.exe"
 $WinSWUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
+$DefaultSatchyIconSource = "https://www.terrasatch.com/terralisten-sasquatch.png"
 
 New-Item -ItemType Directory -Force $Assets | Out-Null
 
@@ -29,6 +30,64 @@ $Python = Join-Path $BuildVenv "Scripts\python.exe"
 & $Python -m pip install --upgrade pip
 & $Python -m pip install -e ".[serial,usb,ui,build,dev]"
 
+if (-not (Test-Path $IconFile)) {
+    $SatchySource = $env:TERRASATCH_SATCHY_ICON_SOURCE
+    if (-not $SatchySource) {
+        $SatchySource = $DefaultSatchyIconSource
+    }
+
+    $IconSource = Join-Path $env:TEMP "TerraSatch-Satchy-icon-source.png"
+    Remove-Item $IconSource -Force -ErrorAction SilentlyContinue
+
+    if (Test-Path $SatchySource) {
+        Copy-Item (Resolve-Path $SatchySource).Path $IconSource -Force
+        Write-Host "Using local Satchy artwork: $SatchySource"
+    } else {
+        Write-Host "Downloading approved Satchy artwork: $SatchySource"
+        Invoke-WebRequest -Uri $SatchySource -OutFile $IconSource
+    }
+
+    $IconBuilder = @'
+from pathlib import Path
+import sys
+from PIL import Image
+
+source = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+image = Image.open(source).convert("RGBA")
+alpha = image.getchannel("A")
+bbox = alpha.getbbox()
+if bbox:
+    image = image.crop(bbox)
+
+canvas_size = 1024
+padding = 92
+max_size = canvas_size - (padding * 2)
+image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+x = (canvas_size - image.width) // 2
+y = (canvas_size - image.height) // 2
+canvas.alpha_composite(image, (x, y))
+destination.parent.mkdir(parents=True, exist_ok=True)
+canvas.save(
+    destination,
+    format="ICO",
+    sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
+)
+'@
+
+    & $Python -c $IconBuilder $IconSource $IconFile
+    Remove-Item $IconSource -Force -ErrorAction SilentlyContinue
+    Write-Host "Generated TerraSatch Edge Satchy icon: $IconFile" -ForegroundColor Green
+}
+
+if (-not (Test-Path $IconFile)) {
+    throw "TerraSatchEdge.ico was not created. Branded Windows release builds require the Satchy icon."
+}
+if ((Get-Item $IconFile).Length -le 0) {
+    throw "TerraSatchEdge.ico is empty. Branded Windows release builds require a valid icon."
+}
+
 Write-Host "[2/7] Running local tests"
 & $Python -m pytest
 
@@ -41,16 +100,11 @@ $PyInstallerArgs = @(
     "--clean",
     "--onedir",
     "--name", "TerraSatchEdge",
+    "--icon", $IconFile,
     "--collect-all", "uvicorn",
     "--collect-all", "fastapi"
 )
-if (Test-Path $IconFile) {
-    $PyInstallerArgs += @("--icon", $IconFile)
-    Write-Host "Using TerraSatch Edge icon: $IconFile" -ForegroundColor Green
-} else {
-    Write-Host "No TerraSatchEdge.ico staged; installer will use default Windows executable icons." -ForegroundColor Yellow
-    Write-Host "Set TERRASATCH_EDGE_ICON to a reviewed .ico file before building to brand the EXE and installer."
-}
+Write-Host "Using TerraSatch Edge Satchy icon: $IconFile" -ForegroundColor Green
 $PyInstallerArgs += "packaging\entrypoints\edge_cli.py"
 & $Python -m PyInstaller @PyInstallerArgs
 
