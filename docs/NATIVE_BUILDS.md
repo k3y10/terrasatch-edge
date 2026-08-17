@@ -2,7 +2,7 @@
 
 TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
 
-Current package version: **0.2.1**.
+Current development package version: **0.2.2**. The currently published Windows pilot remains **0.2.1** until a validated v0.2.2 Windows rebuild replaces it.
 
 ## Shared API contract
 
@@ -40,8 +40,8 @@ The build runs the Python test suite, creates a PyInstaller runtime, installs a 
 Expected artifact names:
 
 ```text
-release/terrasatch-edge_0.2.1_amd64.deb
-release/terrasatch-edge_0.2.1_arm64.deb
+release/terrasatch-edge_0.2.2_amd64.deb
+release/terrasatch-edge_0.2.2_arm64.deb
 ```
 
 The package uses shared system paths so the CLI and background service see the same registration:
@@ -85,8 +85,8 @@ Supported public pilot architectures:
 Expected artifact names:
 
 ```text
-release/TerraSatch-Edge-0.2.1-macOS-arm64.pkg
-release/TerraSatch-Edge-0.2.1-macOS-x64.pkg
+release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
+release/TerraSatch-Edge-0.2.2-macOS-x64.pkg
 ```
 
 The package installs a `LaunchDaemon` (`com.terrasatch.edge`) and uses shared system state under:
