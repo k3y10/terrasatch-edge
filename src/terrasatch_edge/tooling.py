@@ -75,10 +75,18 @@ def probe_rtl_sdr(
     *,
     frequency_hz: int = 100_000_000,
     sample_rate: int = 240_000,
-    sample_count: int = 262_144,
+    sample_count: int = 200_000,
     timeout_seconds: float = 12.0,
 ) -> SdrProbeResult:
-    """Open an RTL-SDR receiver and read a small, finite IQ sample."""
+    """Open an RTL-SDR receiver and read a small, finite IQ sample.
+
+    The default sample count is intentionally not block-aligned. Upstream
+    ``rtl_sdr`` only cancels its asynchronous reader when the remaining byte
+    count is *less than* the callback block length. A request that lands on an
+    exact block boundary can therefore continue reading indefinitely after the
+    requested data has already been written. Keeping this probe non-aligned
+    makes the diagnostic reliably finite on Windows and other platforms.
+    """
     executable = find_executable("rtl_sdr")
     if executable is None:
         return SdrProbeResult(
@@ -113,10 +121,11 @@ def probe_rtl_sdr(
             output = "\n".join(
                 part for part in (exc.stdout, exc.stderr) if isinstance(part, str)
             ).strip()
+            suffix = f" · {output[-500:]}" if output else ""
             return SdrProbeResult(
                 ok=False,
                 executable=executable,
-                detail=f"RTL-SDR receive probe timed out after {timeout_seconds:g}s",
+                detail=f"RTL-SDR receive probe timed out after {timeout_seconds:g}s{suffix}",
                 output=output[-2000:],
             )
         except OSError as exc:
@@ -144,8 +153,13 @@ def probe_rtl_sdr(
             detail = "RTL-SDR runtime is installed but no compatible receiver could be opened"
         elif "usb_claim_interface" in lower or "access denied" in lower:
             detail = "RTL-SDR runtime found the receiver but Windows could not claim its USB interface"
+        elif "failed to open rtlsdr device" in lower:
+            detail = "RTL-SDR found the receiver but could not open it; verify WinUSB on Interface 0 and close other SDR apps"
         else:
             detail = f"RTL-SDR receive probe failed with exit code {result.returncode}"
+
+        if combined:
+            detail = f"{detail} · {combined[-500:]}"
 
         return SdrProbeResult(
             ok=False,
