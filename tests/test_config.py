@@ -14,6 +14,23 @@ def test_config_round_trip(tmp_path, monkeypatch):
     assert load_config().site_id == "site-123"
 
 
+def test_default_api_is_production_https(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERRASATCH_EDGE_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("TERRASATCH_EDGE_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.delenv("TERRASATCH_EDGE_API_URL", raising=False)
+
+    assert load_config().api_url == "https://api.terrasatch.com"
+
+
+def test_api_url_environment_override_wins(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERRASATCH_EDGE_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("TERRASATCH_EDGE_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("TERRASATCH_EDGE_API_URL", "https://api-staging.example")
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+
+    assert load_config().api_url == "https://api-staging.example"
+
+
 def test_api_key_round_trip(tmp_path, monkeypatch):
     monkeypatch.setenv("TERRASATCH_EDGE_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.delenv("TERRASATCH_EDGE_API_KEY", raising=False)
