@@ -15,3 +15,8 @@ htmlcov/
 *.log
 .DS_Store
 Thumbs.db
+
+# Windows pilot build vendor binaries are staged locally, not committed by default.
+packaging/windows/vendor/TerraSatchEdgeService.exe
+packaging/windows/vendor/rtl-sdr/*
+!packaging/windows/vendor/rtl-sdr/README.md
