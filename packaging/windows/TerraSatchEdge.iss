@@ -20,12 +20,10 @@ WizardStyle=modern
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\Edge\{#MyAppExeName}
+SetupIconFile={#MyIconFile}
+UninstallDisplayIcon={app}\TerraSatchEdge.ico
 CloseApplications=yes
 RestartApplications=no
-#if FileExists(MyIconFile)
-SetupIconFile={#MyIconFile}
-#endif
 
 [Dirs]
 Name: "{commonappdata}\TerraSatch\Edge"; Permissions: admins-full system-full users-modify
@@ -39,27 +37,14 @@ Source: "..\windows\TerraSatchEdgeService.xml"; DestDir: "{app}"; Flags: ignorev
 Source: "..\windows\TerraSatchEdgeServiceSetup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows\TerraSatchEdgeSetup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows\TerraSatchEdgeConsole.ps1"; DestDir: "{app}"; Flags: ignoreversion
-#if FileExists(MyIconFile)
 Source: "{#MyIconFile}"; DestDir: "{app}"; DestName: "TerraSatchEdge.ico"; Flags: ignoreversion
-#endif
 
 [Icons]
-#if FileExists(MyIconFile)
 Name: "{group}\TerraSatch Edge Status"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"; IconFilename: "{app}\TerraSatchEdge.ico"
 Name: "{group}\TerraSatch Edge Diagnostics"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command doctor"; IconFilename: "{app}\TerraSatchEdge.ico"
 Name: "{group}\TerraSatch Edge Hardware Scan"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command scan"; IconFilename: "{app}\TerraSatchEdge.ico"
 Name: "{group}\TerraSatch Edge Setup"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeSetup.ps1"""; IconFilename: "{app}\TerraSatchEdge.ico"
-Name: "{commondesktop}\TerraSatch Edge"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"; IconFilename: "{app}\TerraSatchEdge.ico"; Tasks: desktopicon
-#else
-Name: "{group}\TerraSatch Edge Status"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"
-Name: "{group}\TerraSatch Edge Diagnostics"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command doctor"
-Name: "{group}\TerraSatch Edge Hardware Scan"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command scan"
-Name: "{group}\TerraSatch Edge Setup"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeSetup.ps1"""
-Name: "{commondesktop}\TerraSatch Edge"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"; Tasks: desktopicon
-#endif
-
-[Tasks]
-Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
+Name: "{commondesktop}\TerraSatch Edge"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"; IconFilename: "{app}\TerraSatchEdge.ico"
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeServiceSetup.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing or updating TerraSatch Edge service..."
