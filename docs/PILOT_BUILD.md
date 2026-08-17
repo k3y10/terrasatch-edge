@@ -42,9 +42,72 @@ The installer:
 
 - installs the bundled Edge runtime under Program Files
 - installs TerraSatch Edge as an automatic Windows service
-- creates Setup/Status shortcuts
-- launches `TerraSatchEdge setup` after installation
+- creates Setup, Status, Diagnostics, and Hardware Scan shortcuts
+- launches a first-run PowerShell setup wrapper after installation
+- keeps first-run setup visible until the operator closes it
+- writes setup transcripts to `C:\ProgramData\TerraSatch\Edge\state\logs`
 - uses ProgramData for shared configuration/state
+
+## RTL-SDR / Nooelec runtime
+
+PnP detection and the radio runtime are separate checks. Windows may identify a Nooelec NESDR correctly even when the command-line RTL-SDR runtime is not present.
+
+Edge now looks for `rtl_sdr` in:
+
+1. the normal system `PATH`
+2. `TERRASATCH_EDGE_TOOLS`
+3. bundled Edge tool directories such as `Edge\tools\rtl-sdr`
+4. the ProgramData TerraSatch tool directory
+
+When an RTL-SDR/Nooelec is detected and `rtl_sdr` is available, `terrasatch-edge doctor` performs a finite receive-only IQ probe. The probe tunes to 100 MHz, reads a small sample, writes it to a temporary file, and deletes it when complete. This verifies that the runtime can actually open and read the receiver rather than only seeing the Windows PnP record.
+
+### Bundle a trusted Windows runtime
+
+The build does not download an arbitrary third-party RTL-SDR binary. Supply a reviewed runtime explicitly:
+
+```powershell
+$env:TERRASATCH_RTLSDR_BUNDLE = "C:\path\to\trusted\rtl-sdr-runtime"
+.\scripts\build-windows.ps1
+```
+
+The folder must contain `rtl_sdr.exe` and every DLL it requires. The full folder is copied into the native Edge bundle at:
+
+```text
+Edge\tools\rtl-sdr\
+```
+
+Alternatively, place the reviewed files in:
+
+```text
+packaging\windows\vendor\rtl-sdr\
+```
+
+before building.
+
+The upstream Osmocom rtl-sdr project is GPL-licensed. Review and satisfy the applicable redistribution/source obligations before shipping a TerraSatch installer that embeds those binaries.
+
+## Windows pilot verification
+
+After installing and pairing:
+
+```powershell
+& "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" status
+& "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" doctor
+& "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" scan
+Get-Service TerraSatchEdge
+```
+
+Expected lifecycle result:
+
+- API online
+- Edge credential accepted
+- device + site persisted
+- Windows service running
+- Nooelec/RTL-SDR hardware recognized
+- RTL-SDR runtime located when bundled
+- SDR receive probe succeeds when the WinUSB driver and runtime can claim the device
+
+GPS and direct radio-audio interfaces remain optional for the RTL-SDR receive-only pilot.
 
 ## macOS
 
@@ -92,15 +155,16 @@ Linux AMD64  → terrasatch-edge_0.2.0_amd64.deb
 Linux ARM64  → terrasatch-edge_0.2.0_arm64.deb
 ```
 
-For controlled pilots, GitHub Releases can host the files and TerraSatch.com can point to those assets. For broader distribution, use a TerraSatch-controlled download/CDN path and code-sign each artifact.
+For controlled pilots, publish the reviewed native artifacts to a public TerraSatch-controlled release location and point TerraSatch.com to those assets. Code-sign each artifact before broad public distribution.
 
 ## Not yet in v0.2
 
-- actual RTL-SDR IQ capture/demodulation
-- BCA radio audio capture/transcription
+- continuous RTL-SDR IQ capture
 - channel/frequency profiles
+- NFM/FM radio-audio pipeline into TerraListen/Satchy
+- BCA radio audio capture/transcription
 - offline SQLite replay queue
 - automatic binary updater
 - production code signing/notarization
 
-Those belong in the radio adapter/distribution hardening phase after pairing + device health are proven on real field laptops.
+The finite IQ readiness probe is intentionally narrower than the continuous radio adapter. It proves that Edge can open and read the receiver before the streaming/demodulation layer is added.
