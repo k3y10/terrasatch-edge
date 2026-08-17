@@ -30,12 +30,12 @@ _RADIO_CAPABILITY_ALIASES = {
 
 
 def reported_capabilities(snapshot: SystemSnapshot) -> list[str]:
-    """Return control-plane capabilities that are actually usable on this Edge node.
+    """Return provider capabilities that are actually ready for the control plane.
 
-    Hardware discovery and provider readiness are intentionally separate. In particular,
-    discovering a HackRF must not advertise RX/TX until TerraSatch has a working provider
-    adapter for it. RTL-SDR receive is reported only when the runtime is available, and
-    demodulated audio is reported only when rtl_fm is available.
+    Hardware discovery and provider readiness are intentionally separate. A discovered
+    HackRF remains hardware-only until a TerraListen adapter exists. RTL/Nooelec is
+    receive-ready only when both the bounded probe (`rtl_test`) and demodulator
+    (`rtl_fm`) are installed, matching the current API receiver model.
     """
 
     capabilities: set[str] = set()
@@ -53,10 +53,13 @@ def reported_capabilities(snapshot: SystemSnapshot) -> list[str]:
             if capability.lower() not in _RADIO_CAPABILITY_ALIASES:
                 capabilities.add(capability)
 
-    if rtl_detected and find_executable("rtl_sdr") is not None:
-        capabilities.add("radio:receive")
-    if rtl_detected and find_executable("rtl_fm") is not None:
-        capabilities.add("audio:capture")
+    rtl_receive_ready = (
+        rtl_detected
+        and find_executable("rtl_test") is not None
+        and find_executable("rtl_fm") is not None
+    )
+    if rtl_receive_ready:
+        capabilities.update({"radio:receive", "audio:capture"})
     if direct_audio_detected:
         capabilities.add("audio:capture")
 
