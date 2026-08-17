@@ -42,7 +42,7 @@ def test_http_error_wraps(monkeypatch):
         client.identity()
 
 
-def test_rtl_receive_capability_requires_installed_runtime(monkeypatch):
+def test_rtl_receive_capability_requires_complete_receive_runtime(monkeypatch):
     receiver = classify_device(
         HardwareDevice(
             kind=DeviceKind.USB,
@@ -60,7 +60,7 @@ def test_rtl_receive_capability_requires_installed_runtime(monkeypatch):
     assert "audio:capture" not in capabilities
 
 
-def test_rtl_runtime_reports_receive_and_demodulated_audio(monkeypatch):
+def test_rtl_test_and_fm_report_receive_and_demodulated_audio(monkeypatch):
     receiver = classify_device(
         HardwareDevice(
             kind=DeviceKind.USB,
@@ -70,7 +70,7 @@ def test_rtl_runtime_reports_receive_and_demodulated_audio(monkeypatch):
     )
 
     def fake_find(name: str):
-        if name in {"rtl_sdr", "rtl_fm"}:
+        if name in {"rtl_test", "rtl_fm"}:
             return Path(f"/tools/{name}")
         return None
 
@@ -81,6 +81,26 @@ def test_rtl_runtime_reports_receive_and_demodulated_audio(monkeypatch):
     assert "radio:receive" in capabilities
     assert "audio:capture" in capabilities
     assert "radio:transmit" not in capabilities
+
+
+def test_partial_rtl_runtime_does_not_claim_receive_ready(monkeypatch):
+    receiver = classify_device(
+        HardwareDevice(
+            kind=DeviceKind.USB,
+            name="Nooelec NESDR SMArt v5",
+            identifier="usb:0bda:2838",
+        )
+    )
+    monkeypatch.setattr(
+        edge_api,
+        "find_executable",
+        lambda name: Path("/tools/rtl_fm") if name == "rtl_fm" else None,
+    )
+
+    capabilities = reported_capabilities(_snapshot(receiver))
+
+    assert "radio:receive" not in capabilities
+    assert "audio:capture" not in capabilities
 
 
 def test_hackrf_discovery_does_not_report_rx_or_tx(monkeypatch):
