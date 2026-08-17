@@ -42,9 +42,13 @@ if (-not (Test-Path $EdgeExe)) {
     }
 
     if ($Registered) {
+        $DisplaySite = [string]$Status.site_name
+        if ([string]::IsNullOrWhiteSpace($DisplaySite)) {
+            $DisplaySite = [string]$Status.site_id
+        }
         Write-Host "Registration verified." -ForegroundColor Green
         Write-Host "Device: $($Status.device_id)"
-        Write-Host "Site: $($Status.site_name ?? $Status.site_id)"
+        Write-Host "Site: $DisplaySite"
         Write-Host "API: $($Status.api_url)"
         Write-Host ""
         Write-Host "This Edge node is already paired. Existing registration was preserved."
