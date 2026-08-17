@@ -6,10 +6,61 @@ import httpx
 
 from . import __version__
 from .models import ApiIdentity, EdgeDevice, PairingClaim, PairingStart, SiteSummary, SystemSnapshot
+from .tooling import find_executable
 
 
 class TerraSatchApiError(RuntimeError):
     pass
+
+
+_RADIO_CAPABILITY_ALIASES = {
+    "radio_rx",
+    "radio_tx",
+    "radio:receive",
+    "radio:rx",
+    "radio:transmit",
+    "radio:tx",
+    "rx",
+    "tx",
+    "receive",
+    "transmit",
+    "ptt",
+    "audio:capture",
+}
+
+
+def reported_capabilities(snapshot: SystemSnapshot) -> list[str]:
+    """Return control-plane capabilities that are actually usable on this Edge node.
+
+    Hardware discovery and provider readiness are intentionally separate. In particular,
+    discovering a HackRF must not advertise RX/TX until TerraSatch has a working provider
+    adapter for it. RTL-SDR receive is reported only when the runtime is available, and
+    demodulated audio is reported only when rtl_fm is available.
+    """
+
+    capabilities: set[str] = set()
+    rtl_detected = False
+    direct_audio_detected = False
+
+    for device in snapshot.devices:
+        device_capabilities = {str(item) for item in device.capabilities}
+        normalized = {item.lower() for item in device_capabilities}
+
+        rtl_detected = rtl_detected or bool({"rtl-sdr", "nooelec"} & normalized)
+        direct_audio_detected = direct_audio_detected or "audio_input" in normalized
+
+        for capability in device_capabilities:
+            if capability.lower() not in _RADIO_CAPABILITY_ALIASES:
+                capabilities.add(capability)
+
+    if rtl_detected and find_executable("rtl_sdr") is not None:
+        capabilities.add("radio:receive")
+    if rtl_detected and find_executable("rtl_fm") is not None:
+        capabilities.add("audio:capture")
+    if direct_audio_detected:
+        capabilities.add("audio:capture")
+
+    return sorted(capabilities)
 
 
 class TerraSatchApiClient:
@@ -115,13 +166,7 @@ class TerraSatchApiClient:
         return EdgeDevice.model_validate(self._request("GET", "/api/v1/edge/me").json())
 
     def heartbeat(self, snapshot: SystemSnapshot) -> dict[str, Any]:
-        capabilities = sorted(
-            {
-                capability
-                for device in snapshot.devices
-                for capability in device.capabilities
-            }
-        )
+        capabilities = reported_capabilities(snapshot)
         inventory = [device.model_dump(mode="json") for device in snapshot.devices]
         response = self._request(
             "POST",
