@@ -4,7 +4,8 @@
 
 TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
-> Current development milestone: **v0.2.1 native pilot runtime**
+> Current development milestone: **v0.2.2 native compatibility pilot**  
+> Current public Windows build: **v0.2.1**
 
 ## Pilot architecture
 
@@ -20,7 +21,7 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
                   TerraListen / Satchy
 ```
 
-## v0.2.1 capabilities
+## v0.2.2 development capabilities
 
 - Windows, macOS and Linux shared runtime
 - browser/device-code pairing against the TerraSatch Edge control plane
@@ -95,7 +96,7 @@ produces:
 release\TerraSatch-Edge-Setup-x64.exe
 ```
 
-The validated v0.2.1 Windows pilot is published from `www.terrasatch.com/downloads`. A reviewed RTL-SDR Windows runtime is embedded in the tested artifact so Edge can locate `rtl_sdr`, `rtl_test` and `rtl_fm` without target-machine PATH changes.
+The validated v0.2.1 Windows pilot remains published from `www.terrasatch.com/downloads`. The next Windows rebuild should be v0.2.2 so it picks up the same current-API capability policy as the macOS/Linux development train.
 
 macOS:
 
@@ -103,7 +104,7 @@ macOS:
 ./scripts/build-macos.sh
 ```
 
-The native package installs `com.terrasatch.edge` as a LaunchDaemon. The public download remains disabled until Apple Silicon/Intel artifacts are built and validated. Broad distribution requires Developer ID signing and notarization.
+The native package installs `com.terrasatch.edge` as a LaunchDaemon. New native packages derive v0.2.2 from the source package. The public download remains disabled until Apple Silicon/Intel artifacts are built and validated. Broad distribution requires Developer ID signing and notarization.
 
 Linux:
 
@@ -111,7 +112,7 @@ Linux:
 ./scripts/build-linux-deb.sh
 ```
 
-The Debian/Ubuntu package installs a persistent systemd service and uses the same system registration for CLI + service. The public download remains disabled until amd64/arm64 artifacts are built and validated.
+The Debian/Ubuntu package installs a persistent systemd service and uses the same system registration for CLI + service. New native packages derive v0.2.2 from the source package. The public download remains disabled until amd64/arm64 artifacts are built and validated.
 
 PyInstaller builds must be run on the operating system and architecture being packaged. The target user's machine does not need a Python installation.
 
