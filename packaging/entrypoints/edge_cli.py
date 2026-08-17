@@ -1,4 +1,4 @@
-from terrasatch_edge.cli import app
+from terrasatch_edge.entrypoint import main
 
 if __name__ == "__main__":
-    app()
+    main()
