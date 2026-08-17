@@ -30,6 +30,7 @@ Name: "{commonappdata}\TerraSatch\Edge\state\logs"; Permissions: admins-full sys
 Source: "..\..\dist\TerraSatchEdge\*"; DestDir: "{app}\Edge"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows\vendor\TerraSatchEdgeService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows\TerraSatchEdgeService.xml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\windows\TerraSatchEdgeServiceSetup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows\TerraSatchEdgeSetup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows\TerraSatchEdgeConsole.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -44,8 +45,7 @@ Name: "{commondesktop}\TerraSatch Edge"; Filename: "{sys}\WindowsPowerShell\v1.0
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Run]
-Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "install"; Flags: runhidden waituntilterminated; StatusMsg: "Installing TerraSatch Edge service..."
-Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "start"; Flags: runhidden waituntilterminated; StatusMsg: "Starting TerraSatch Edge service..."
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeServiceSetup.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing or updating TerraSatch Edge service..."
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeSetup.ps1"""; Description: "Pair and configure TerraSatch Edge"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
