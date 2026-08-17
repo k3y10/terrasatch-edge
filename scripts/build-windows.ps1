@@ -39,12 +39,14 @@ if (-not (Test-Path $IconFile)) {
     $IconSource = Join-Path $env:TEMP "TerraSatch-Satchy-icon-source.png"
     Remove-Item $IconSource -Force -ErrorAction SilentlyContinue
 
-    if (Test-Path $SatchySource) {
+    if ($SatchySource -match '^https?://') {
+        Write-Host "Downloading approved Satchy artwork: $SatchySource"
+        Invoke-WebRequest -Uri $SatchySource -OutFile $IconSource
+    } elseif (Test-Path $SatchySource) {
         Copy-Item (Resolve-Path $SatchySource).Path $IconSource -Force
         Write-Host "Using local Satchy artwork: $SatchySource"
     } else {
-        Write-Host "Downloading approved Satchy artwork: $SatchySource"
-        Invoke-WebRequest -Uri $SatchySource -OutFile $IconSource
+        throw "Satchy icon source was not found: $SatchySource"
     }
 
     $IconBuilder = @'
