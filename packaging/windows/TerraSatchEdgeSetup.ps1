@@ -15,16 +15,47 @@ try {
     Write-Warning "Could not start setup transcript: $($_.Exception.Message)"
 }
 
-Write-Host "TerraSatch Edge Setup" -ForegroundColor Green
-Write-Host "This window will remain open when setup finishes so you can review the result."
+Write-Host "TerraSatch Edge" -ForegroundColor Green
+Write-Host "Checking this device registration..."
 Write-Host ""
 
 if (-not (Test-Path $EdgeExe)) {
     Write-Host "TerraSatch Edge executable was not found at: $EdgeExe" -ForegroundColor Red
     $ExitCode = 2
 } else {
-    & $EdgeExe setup
-    $ExitCode = $LASTEXITCODE
+    $Registered = $false
+    $Status = $null
+
+    try {
+        $StatusText = (& $EdgeExe status --json 2>$null | Out-String).Trim()
+        if ($StatusText) {
+            $Status = $StatusText | ConvertFrom-Json
+            $Registered = (
+                $Status.authenticated -eq $true -and
+                -not [string]::IsNullOrWhiteSpace([string]$Status.device_id) -and
+                -not [string]::IsNullOrWhiteSpace([string]$Status.site_id)
+            )
+        }
+    } catch {
+        Write-Host "Existing registration could not be verified: $($_.Exception.Message)" -ForegroundColor Yellow
+        $Registered = $false
+    }
+
+    if ($Registered) {
+        Write-Host "Registration verified." -ForegroundColor Green
+        Write-Host "Device: $($Status.device_id)"
+        Write-Host "Site: $($Status.site_name ?? $Status.site_id)"
+        Write-Host "API: $($Status.api_url)"
+        Write-Host ""
+        Write-Host "This Edge node is already paired. Existing registration was preserved."
+        $ExitCode = 0
+    } else {
+        Write-Host "This device is new, unregistered, or its saved credential is no longer valid." -ForegroundColor Yellow
+        Write-Host "Starting TerraSatch Edge pairing..."
+        Write-Host ""
+        & $EdgeExe setup
+        $ExitCode = $LASTEXITCODE
+    }
 }
 
 if ($TranscriptStarted) {
@@ -33,9 +64,9 @@ if ($TranscriptStarted) {
 
 Write-Host ""
 if ($ExitCode -eq 0) {
-    Write-Host "TerraSatch Edge setup completed." -ForegroundColor Green
+    Write-Host "TerraSatch Edge is ready." -ForegroundColor Green
 } else {
-    Write-Host "TerraSatch Edge setup exited with code $ExitCode." -ForegroundColor Yellow
+    Write-Host "TerraSatch Edge setup/verification exited with code $ExitCode." -ForegroundColor Yellow
 }
 Write-Host "Setup log: $TranscriptPath"
 Write-Host ""
