@@ -34,6 +34,12 @@ class EdgeConfig(BaseModel):
     node_name: str | None = None
     scan_interval_seconds: int = Field(default=30, ge=5, le=3600)
     source: str = "terrasatch-edge"
+    speech_model: str = "base.en"
+    speech_device: str = "cpu"
+    speech_compute_type: str = "int8"
+    speech_language: str | None = "en"
+    speech_vad_filter: bool = True
+    speech_local_files_only: bool = False
 
 
 @dataclass(frozen=True)
@@ -66,12 +72,15 @@ def _tighten_permissions(path: Path) -> None:
         path.chmod(0o600)
 
 
+def _env_bool(name: str) -> bool | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def load_config() -> EdgeConfig:
     paths = get_paths()
-    env_api = os.environ.get("TERRASATCH_EDGE_API_URL")
-    env_site = os.environ.get("TERRASATCH_EDGE_SITE_ID")
-    env_interval = os.environ.get("TERRASATCH_EDGE_SCAN_INTERVAL_SECONDS")
-
     data: dict[str, object] = {}
     if paths.config_file.exists():
         try:
@@ -79,16 +88,34 @@ def load_config() -> EdgeConfig:
         except (json.JSONDecodeError, OSError):
             data = {}
 
-    if env_api:
-        data["api_url"] = env_api
-    if env_site:
-        data["site_id"] = env_site
+    string_overrides = {
+        "api_url": "TERRASATCH_EDGE_API_URL",
+        "site_id": "TERRASATCH_EDGE_SITE_ID",
+        "speech_model": "TERRASATCH_EDGE_SPEECH_MODEL",
+        "speech_device": "TERRASATCH_EDGE_SPEECH_DEVICE",
+        "speech_compute_type": "TERRASATCH_EDGE_SPEECH_COMPUTE_TYPE",
+        "speech_language": "TERRASATCH_EDGE_SPEECH_LANGUAGE",
+    }
+    for field_name, env_name in string_overrides.items():
+        raw = os.environ.get(env_name)
+        if raw:
+            data[field_name] = raw.strip()
+
+    env_interval = os.environ.get("TERRASATCH_EDGE_SCAN_INTERVAL_SECONDS")
     if env_interval:
         data["scan_interval_seconds"] = int(env_interval)
 
+    for field_name, env_name in (
+        ("speech_vad_filter", "TERRASATCH_EDGE_SPEECH_VAD_FILTER"),
+        ("speech_local_files_only", "TERRASATCH_EDGE_SPEECH_LOCAL_FILES_ONLY"),
+    ):
+        value = _env_bool(env_name)
+        if value is not None:
+            data[field_name] = value
+
     try:
         return EdgeConfig.model_validate(data)
-    except ValidationError:
+    except (ValidationError, ValueError):
         return EdgeConfig()
 
 
