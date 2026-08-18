@@ -29,7 +29,36 @@ jobs:
           python -m pip install -e '.[dev]'
 
       - name: Ruff
-        run: ruff check src tests
+        shell: bash
+        run: |
+          mkdir -p qa-logs
+          set +e
+          ruff check src tests 2>&1 | tee qa-logs/ruff.log
+          echo "${PIPESTATUS[0]}" > qa-logs/ruff.status
+          exit 0
 
       - name: Tests
-        run: pytest --cov=terrasatch_edge --cov-report=term-missing
+        shell: bash
+        run: |
+          set +e
+          pytest --cov=terrasatch_edge --cov-report=term-missing 2>&1 | tee qa-logs/pytest.log
+          echo "${PIPESTATUS[0]}" > qa-logs/pytest.status
+          exit 0
+
+      - name: Upload QA logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-logs
+          path: qa-logs
+          retention-days: 3
+
+      - name: Enforce QA result
+        shell: bash
+        run: |
+          ruff_status="$(cat qa-logs/ruff.status)"
+          pytest_status="$(cat qa-logs/pytest.status)"
+          echo "ruff=$ruff_status pytest=$pytest_status"
+          if [ "$ruff_status" != "0" ] || [ "$pytest_status" != "0" ]; then
+            exit 1
+          fi
