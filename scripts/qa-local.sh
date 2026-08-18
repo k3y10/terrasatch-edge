@@ -7,7 +7,12 @@ cd "$ROOT"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 QA_CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/terrasatch"
 VENV_DIR="${TERRASATCH_QA_VENV:-$QA_CACHE_ROOT/edge-qa-venv}"
+COVERAGE_XML="$QA_CACHE_ROOT/edge-coverage.xml"
 WITH_SPEECH="${TERRASATCH_QA_WITH_SPEECH:-0}"
+
+# QA must not inherit production credentials or call the production API.
+export TERRASATCH_EDGE_API_URL=http://127.0.0.1:18000
+unset TERRASATCH_EDGE_API_KEY || true
 
 printf '\nTerraSatch Edge local QA\n'
 printf 'Repository: %s\n' "$ROOT"
@@ -21,7 +26,7 @@ if sys.version_info < (3, 12):
     raise SystemExit(f"Python 3.12+ required, found {sys.version}")
 PY
 
-mkdir -p "$(dirname "$VENV_DIR")"
+mkdir -p "$QA_CACHE_ROOT"
 if [[ ! -d "$VENV_DIR" ]]; then
   "$PYTHON_BIN" -m venv "$VENV_DIR"
 fi
@@ -35,6 +40,9 @@ if [[ "$WITH_SPEECH" == "1" ]]; then
 else
   python -m pip install -e '.[dev]'
 fi
+python -m pip check
+
+git diff --check
 
 printf '\n[1/5] Ruff\n'
 ruff check src tests
@@ -53,7 +61,7 @@ print(f"Canonical audio ingest: {ingest_audio_file.__name__}")
 PY
 
 printf '\n[3/5] Full pytest + project coverage threshold\n'
-pytest --cov=terrasatch_edge --cov-report=term-missing --cov-report=xml
+pytest --cov=terrasatch_edge --cov-report=term-missing --cov-report="xml:$COVERAGE_XML"
 
 printf '\n[4/5] CLI smoke\n'
 terrasatch-edge --help >/dev/null
