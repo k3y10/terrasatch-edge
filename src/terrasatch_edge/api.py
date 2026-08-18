@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from . import __version__
 from .models import ApiIdentity, SiteSummary
 
 
@@ -18,7 +19,7 @@ class TerraSatchApiClient:
         self.timeout = timeout
 
     def _headers(self) -> dict[str, str]:
-        headers = {"User-Agent": "terrasatch-edge/0.1.0"}
+        headers = {"User-Agent": f"terrasatch-edge/{__version__}"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
@@ -91,6 +92,10 @@ class TerraSatchApiClient:
         source: str = "terrasatch-edge",
         agent_id: str | None = None,
         channel_id: str | None = None,
+        transcript_provider: str | None = None,
+        transcript_model: str | None = None,
+        transcript_language: str | None = None,
+        transcript_confidence: float | None = None,
     ) -> dict[str, Any]:
         body = {
             "site_id": site_id,
@@ -100,6 +105,10 @@ class TerraSatchApiClient:
             "text": text,
             "source": source,
             "source_message_id": source_message_id,
+            "transcript_provider": transcript_provider,
+            "transcript_model": transcript_model,
+            "transcript_language": transcript_language,
+            "transcript_confidence": transcript_confidence,
         }
         response = self._request("POST", "/api/v1/transmissions", json=body)
         payload = response.json()
