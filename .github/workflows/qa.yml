@@ -10,55 +10,62 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  checkout:
+    name: checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          pwd
+          git rev-parse --short HEAD
+          python3 --version
+
+  python-setup:
+    name: python-setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python --version
+
+  install:
+    name: install
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+          python -c "import terrasatch_edge; print(terrasatch_edge.__version__)"
+
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e '.[dev]'
+      - run: ruff check src tests
+
+  tests:
+    name: pytest
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[dev]'
-
-      - name: Ruff
-        shell: bash
-        run: |
-          mkdir -p qa-logs
-          set +e
-          ruff check src tests 2>&1 | tee qa-logs/ruff.log
-          echo "${PIPESTATUS[0]}" > qa-logs/ruff.status
-          exit 0
-
-      - name: Tests
-        shell: bash
-        run: |
-          set +e
-          pytest --cov=terrasatch_edge --cov-report=term-missing 2>&1 | tee qa-logs/pytest.log
-          echo "${PIPESTATUS[0]}" > qa-logs/pytest.status
-          exit 0
-
-      - name: Upload QA logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-logs
-          path: qa-logs
-          retention-days: 3
-
-      - name: Enforce QA result
-        shell: bash
-        run: |
-          ruff_status="$(cat qa-logs/ruff.status)"
-          pytest_status="$(cat qa-logs/pytest.status)"
-          echo "ruff=$ruff_status pytest=$pytest_status"
-          if [ "$ruff_status" != "0" ] || [ "$pytest_status" != "0" ]; then
-            exit 1
-          fi
+      - run: python -m pip install -e '.[dev]'
+      - run: pytest --cov=terrasatch_edge --cov-report=term-missing
