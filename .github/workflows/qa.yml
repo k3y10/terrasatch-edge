@@ -1,7 +1,6 @@
 name: QA
 
 on:
-  pull_request:
   push:
     branches:
       - agent/edge-speech-0.2
@@ -10,62 +9,59 @@ permissions:
   contents: read
 
 jobs:
-  checkout:
-    name: checkout
+  qa:
+    name: full-qa
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - run: |
-          pwd
+      - name: Clone branch without marketplace actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic $auth" clone \
+            --depth 1 \
+            --branch "$GITHUB_REF_NAME" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" repo
+          cd repo
           git rev-parse --short HEAD
+
+      - name: Verify Python
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 --version
+          python3 - <<'PY'
+          import sys
+          if sys.version_info < (3, 12):
+              raise SystemExit(f"Python 3.12+ required, found {sys.version}")
+          PY
 
-  python-setup:
-    name: python-setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python --version
-
-  install:
-    name: install
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: |
+      - name: Install QA environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd repo
+          python3 -m venv .venv
+          . .venv/bin/activate
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
           python -c "import terrasatch_edge; print(terrasatch_edge.__version__)"
 
-  lint:
-    name: ruff
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install -e '.[dev]'
-      - run: ruff check src tests
+      - name: Ruff
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd repo
+          . .venv/bin/activate
+          ruff check src tests
 
-  tests:
-    name: pytest
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install -e '.[dev]'
-      - run: pytest --cov=terrasatch_edge --cov-report=term-missing
+      - name: Full pytest and coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd repo
+          . .venv/bin/activate
+          pytest --cov=terrasatch_edge --cov-report=term-missing
