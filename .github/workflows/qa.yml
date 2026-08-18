@@ -1,0 +1,35 @@
+name: QA
+
+on:
+  pull_request:
+  push:
+    branches:
+      - agent/edge-speech-0.2
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Ruff
+        run: ruff check src tests
+
+      - name: Tests
+        run: pytest --cov=terrasatch_edge --cov-report=term-missing
