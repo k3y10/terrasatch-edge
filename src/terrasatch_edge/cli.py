@@ -6,6 +6,7 @@ import platform
 import socket
 import sys
 import uuid
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -16,10 +17,20 @@ from rich.table import Table
 from . import __version__
 from .agent import EdgeAgent
 from .api import TerraSatchApiClient, TerraSatchApiError
-from .config import EdgeConfig, clear_api_key, get_paths, load_api_key, load_config, save_api_key, save_config
+from .config import (
+    EdgeConfig,
+    clear_api_key,
+    get_paths,
+    load_api_key,
+    load_config,
+    save_api_key,
+    save_config,
+)
 from .discovery import save_snapshot, scan_hardware
 from .doctor import run_doctor
+from .ingest import ingest_audio_file
 from .models import DeviceKind, HardwareDevice
+from .speech import FasterWhisperSpeechProvider, SpeechProcessingError, SpeechProviderUnavailable
 
 app = typer.Typer(no_args_is_help=True, help="TerraSatch Edge local setup and field-device agent.")
 console = Console()
@@ -102,10 +113,17 @@ def devices() -> None:
 @app.command()
 def setup(
     api_url: Annotated[str | None, typer.Option("--api-url", help="TerraSatch API base URL.")] = None,
-    api_key: Annotated[str | None, typer.Option("--api-key", help="Service API key; omit to enter securely.")] = None,
-    site_id: Annotated[str | None, typer.Option("--site-id", help="Preselect a TerraSatch site UUID.")] = None,
+    api_key: Annotated[
+        str | None,
+        typer.Option("--api-key", help="Service API key; omit to enter securely."),
+    ] = None,
+    site_id: Annotated[
+        str | None,
+        typer.Option("--site-id", help="Preselect a TerraSatch site UUID."),
+    ] = None,
     non_interactive: Annotated[
-        bool, typer.Option("--non-interactive", help="Fail instead of prompting for missing values.")
+        bool,
+        typer.Option("--non-interactive", help="Fail instead of prompting for missing values."),
     ] = False,
 ) -> None:
     """Run the TerraSatch Edge setup wizard."""
@@ -199,6 +217,12 @@ def setup(
         node_name=node_name,
         scan_interval_seconds=current.scan_interval_seconds,
         source=current.source,
+        speech_model=current.speech_model,
+        speech_device=current.speech_device,
+        speech_compute_type=current.speech_compute_type,
+        speech_language=current.speech_language,
+        speech_vad_filter=current.speech_vad_filter,
+        speech_local_files_only=current.speech_local_files_only,
     )
     config_path = save_config(config)
     credential_path = save_api_key(key)
@@ -278,7 +302,9 @@ def doctor() -> None:
         table.add_row(marker, check.name, check.detail, check.recommendation or "—")
     console.print(table)
     if failures:
-        console.print(f"[yellow]{failures} diagnostic item(s) need attention or are optional hardware gaps.[/yellow]")
+        console.print(
+            f"[yellow]{failures} diagnostic item(s) need attention or are optional hardware gaps.[/yellow]"
+        )
 
 
 @app.command("ingest-text")
@@ -313,6 +339,58 @@ def ingest_text(
         raise typer.Exit(3) from exc
     console.print("[green]✓ Transmission accepted[/green]")
     console.print_json(json.dumps(response, default=str))
+
+
+@app.command("ingest-audio")
+def ingest_audio(
+    audio_path: Annotated[Path, typer.Argument(help="Bounded WAV/MP3/audio file to transcribe and ingest.")],
+    callsign: Annotated[str | None, typer.Option("--callsign")] = None,
+    site_id: Annotated[str | None, typer.Option("--site-id")] = None,
+    source_message_id: Annotated[str | None, typer.Option("--source-message-id")] = None,
+    hotwords: Annotated[
+        str | None,
+        typer.Option("--hotwords", help="Optional local names/callsigns to bias transcription."),
+    ] = None,
+) -> None:
+    """Transcribe local radio audio and send it through the canonical TerraSatch ingest path."""
+    config = load_config()
+    key = load_api_key()
+    if not key:
+        console.print("[red]No API key configured. Run `terrasatch-edge setup`.[/red]")
+        raise typer.Exit(2)
+
+    provider = FasterWhisperSpeechProvider(
+        model_name=config.speech_model,
+        device=config.speech_device,
+        compute_type=config.speech_compute_type,
+        vad_filter=config.speech_vad_filter,
+        local_files_only=config.speech_local_files_only,
+    )
+    client = TerraSatchApiClient(config.api_url, key)
+    try:
+        result = ingest_audio_file(
+            client=client,
+            config=config,
+            provider=provider,
+            audio_path=audio_path,
+            callsign=callsign,
+            site_id=site_id,
+            source_message_id=source_message_id,
+            hotwords=hotwords,
+            initial_prompt="TerraSatch field radio traffic.",
+        )
+    except (SpeechProviderUnavailable, SpeechProcessingError, TerraSatchApiError, ValueError) as exc:
+        console.print(f"[red]Audio ingestion failed:[/red] {exc}")
+        raise typer.Exit(3) from exc
+
+    console.print("[green]✓ Audio transcribed and transmission accepted[/green]")
+    console.print(f"Transcript: [bold]{result.transcript.normalized_text}[/bold]")
+    console.print(
+        f"STT: {result.transcript.provider} / {result.transcript.model} · "
+        f"language={result.transcript.language or 'unknown'} · "
+        f"confidence={result.transcript.language_confidence if result.transcript.language_confidence is not None else 'unknown'}"
+    )
+    console.print_json(json.dumps(result.api_response, default=str))
 
 
 @app.command()
