@@ -1,9 +1,7 @@
 name: QA
 
 on:
-  push:
-    branches:
-      - agent/edge-speech-0.2
+  pull_request:
 
 permissions:
   contents: read
@@ -20,10 +18,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c http.extraheader="AUTHORIZATION: basic $auth" clone \
             --depth 1 \
-            --branch "$GITHUB_REF_NAME" \
+            --branch "$branch" \
             "https://github.com/${GITHUB_REPOSITORY}.git" repo
           cd repo
           git rev-parse --short HEAD
