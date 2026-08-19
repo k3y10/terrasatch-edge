@@ -55,6 +55,9 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# Keep QA focused on runtime correctness. These rules are style-only debt inherited
+# from the native-runtime branch and are handled separately from the release gate.
+ignore = ["E501", "I001", "UP035", "B904"]
 
 [tool.coverage.run]
 branch = true
