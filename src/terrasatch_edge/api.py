@@ -30,14 +30,6 @@ _RADIO_CAPABILITY_ALIASES = {
 
 
 def reported_capabilities(snapshot: SystemSnapshot) -> list[str]:
-    """Return provider capabilities that are actually ready for the control plane.
-
-    Hardware discovery and provider readiness are intentionally separate. A discovered
-    HackRF remains hardware-only until a TerraListen adapter exists. RTL/Nooelec is
-    receive-ready only when both the bounded probe (`rtl_test`) and demodulator
-    (`rtl_fm`) are installed, matching the current API receiver model.
-    """
-
     capabilities: set[str] = set()
     rtl_detected = False
     direct_audio_detected = False
@@ -45,10 +37,8 @@ def reported_capabilities(snapshot: SystemSnapshot) -> list[str]:
     for device in snapshot.devices:
         device_capabilities = {str(item) for item in device.capabilities}
         normalized = {item.lower() for item in device_capabilities}
-
         rtl_detected = rtl_detected or bool({"rtl-sdr", "nooelec"} & normalized)
         direct_audio_detected = direct_audio_detected or "audio_input" in normalized
-
         for capability in device_capabilities:
             if capability.lower() not in _RADIO_CAPABILITY_ALIASES:
                 capabilities.add(capability)
@@ -62,7 +52,6 @@ def reported_capabilities(snapshot: SystemSnapshot) -> list[str]:
         capabilities.update({"radio:receive", "audio:capture"})
     if direct_audio_detected:
         capabilities.add("audio:capture")
-
     return sorted(capabilities)
 
 
@@ -200,6 +189,10 @@ class TerraSatchApiClient:
         source: str = "terrasatch-edge",
         agent_id: str | None = None,
         channel_id: str | None = None,
+        transcript_provider: str | None = None,
+        transcript_model: str | None = None,
+        transcript_language: str | None = None,
+        transcript_confidence: float | None = None,
     ) -> dict[str, Any]:
         body = {
             "site_id": site_id,
@@ -209,6 +202,10 @@ class TerraSatchApiClient:
             "text": text,
             "source": source,
             "source_message_id": source_message_id,
+            "transcript_provider": transcript_provider,
+            "transcript_model": transcript_model,
+            "transcript_language": transcript_language,
+            "transcript_confidence": transcript_confidence,
         }
         response = self._request("POST", "/api/v1/transmissions", json=body)
         payload = response.json()

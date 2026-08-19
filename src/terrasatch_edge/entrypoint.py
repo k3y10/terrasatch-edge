@@ -4,6 +4,9 @@ import sys
 
 from . import __version__
 from .cli import app
+from .speech_cli import register_speech_commands
+
+register_speech_commands(app)
 
 
 def main(argv: list[str] | None = None) -> None:

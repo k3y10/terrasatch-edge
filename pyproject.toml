@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "terrasatch-edge"
 version = "0.2.2"
-description = "TerraSatch Edge: local hardware discovery, pairing, device health, diagnostics, and API bridge for field devices."
+description = "TerraSatch Edge: local hardware discovery, pairing, device health, diagnostics, speech ingestion, and API bridge for field devices."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
@@ -22,9 +22,11 @@ dependencies = [
 serial = ["pyserial>=3.5,<4"]
 usb = ["pyusb>=1.2,<2"]
 ui = ["fastapi>=0.115,<1", "uvicorn[standard]>=0.30,<1"]
+speech = ["faster-whisper>=1.1,<2"]
 build = [
     "pyinstaller>=6.11,<7",
     "pillow>=11,<13",
+    "faster-whisper>=1.1,<2",
 ]
 dev = [
     "pytest>=8.3,<9",
@@ -36,8 +38,27 @@ dev = [
 terrasatch-edge = "terrasatch_edge.entrypoint:main"
 tsedge = "terrasatch_edge.entrypoint:main"
 
+[project.entry-points."pyinstaller40"]
+hook-dirs = "terrasatch_edge.pyinstaller_hooks:get_hook_dirs"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/terrasatch_edge"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.coverage.run]
+branch = true
+source = ["terrasatch_edge"]
+
+[tool.coverage.report]
+show_missing = true
