@@ -79,7 +79,11 @@ plutil -lint "$PLIST"
 
 sudo launchctl print system/com.terrasatch.edge | tee "$LAUNCHD_LOG"
 
-$CLI status --json | tee "$STATUS_LOG"
-$CLI doctor | tee "$DOCTOR_LOG"
+# The native package intentionally stores configuration and credentials under a
+# root-owned 0700 system directory so the LaunchDaemon and administrative CLI
+# share one protected registration. Run stateful diagnostics with the same
+# privileges expected by the installed package documentation.
+sudo "$CLI" status --json | tee "$STATUS_LOG"
+sudo "$CLI" doctor | tee "$DOCTOR_LOG"
 
 echo "macOS package verification passed for $EXPECTED_ARCH v$EXPECTED_VERSION."
