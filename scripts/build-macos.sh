@@ -13,31 +13,73 @@ if ! command -v pkgbuild >/dev/null 2>&1; then
   exit 1
 fi
 
-BUILD_VENV="$ROOT/.build-venv"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
-  echo "Python 3.12+ is required to build TerraSatch Edge." >&2
-  exit 1
-fi
-if [[ ! -d "$BUILD_VENV" ]]; then
-  "$PYTHON_BIN" -m venv "$BUILD_VENV"
-fi
-PYTHON="$BUILD_VENV/bin/python"
-"$PYTHON" -m pip install --upgrade pip
-"$PYTHON" -m pip install -e '.[serial,usb,ui,build,dev]'
-
-VERSION="$($PYTHON -c 'import terrasatch_edge; print(terrasatch_edge.__version__)')"
-MACHINE="$(uname -m)"
-case "$MACHINE" in
-  arm64) ARCH="arm64" ;;
-  x86_64) ARCH="x64" ;;
+HOST_MACHINE="$(uname -m)"
+TARGET_ARCH="${TERRASATCH_MACOS_TARGET_ARCH:-$HOST_MACHINE}"
+case "$TARGET_ARCH" in
+  arm64)
+    ARCH="arm64"
+    PYINSTALLER_TARGET_ARCH="arm64"
+    ;;
+  x64|x86_64)
+    ARCH="x64"
+    PYINSTALLER_TARGET_ARCH="x86_64"
+    ;;
   *)
-    echo "Unsupported public pilot architecture: $MACHINE (expected arm64 or x86_64)." >&2
+    echo "Unsupported macOS target architecture: $TARGET_ARCH (expected arm64, x64, or x86_64)." >&2
     exit 1
     ;;
 esac
 
-"$PYTHON" -m pytest
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+PYTHON_RUN_ARCH="${TERRASATCH_MACOS_PYTHON_ARCH:-}"
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "Python 3.12+ is required to build TerraSatch Edge." >&2
+  exit 1
+fi
+
+run_python_bin() {
+  if [[ -n "$PYTHON_RUN_ARCH" ]]; then
+    arch "-$PYTHON_RUN_ARCH" "$PYTHON_BIN" "$@"
+  else
+    "$PYTHON_BIN" "$@"
+  fi
+}
+
+if ! run_python_bin -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'; then
+  echo "Python 3.12+ is required to build TerraSatch Edge." >&2
+  exit 1
+fi
+
+PYTHON_EXEC_ARCH="$(run_python_bin -c 'import platform; print(platform.machine())')"
+if [[ "$PYTHON_EXEC_ARCH" != "$PYINSTALLER_TARGET_ARCH" ]]; then
+  echo "Python is running as $PYTHON_EXEC_ARCH but the requested target is $PYINSTALLER_TARGET_ARCH." >&2
+  echo "Run a universal2 Python under the requested architecture (Rosetta for x86_64 on Apple Silicon)." >&2
+  exit 1
+fi
+
+BUILD_VENV="$ROOT/.build-venv-macos-$ARCH"
+rm -rf "$BUILD_VENV"
+run_python_bin -m venv "$BUILD_VENV"
+PYTHON="$BUILD_VENV/bin/python"
+
+run_python() {
+  if [[ -n "$PYTHON_RUN_ARCH" ]]; then
+    arch "-$PYTHON_RUN_ARCH" "$PYTHON" "$@"
+  else
+    "$PYTHON" "$@"
+  fi
+}
+
+run_python -m pip install --upgrade pip
+run_python -m pip install -e '.[serial,usb,ui,build,dev]'
+
+VERSION="$(run_python -c 'import terrasatch_edge; print(terrasatch_edge.__version__)')"
+echo "Host architecture: $HOST_MACHINE"
+echo "Python execution architecture: $PYTHON_EXEC_ARCH"
+echo "Target architecture: $PYINSTALLER_TARGET_ARCH"
+echo "TerraSatch Edge version: $VERSION"
+
+run_python -m pytest
 rm -rf build dist release/macos-root release/macos-scripts
 
 PYINSTALLER_ARGS=(
@@ -45,6 +87,7 @@ PYINSTALLER_ARGS=(
   --clean
   --onedir
   --name TerraSatchEdge
+  --target-arch "$PYINSTALLER_TARGET_ARCH"
   --collect-all uvicorn
   --collect-all fastapi
 )
@@ -52,7 +95,30 @@ if [[ -n "${TERRASATCH_MACOS_APPLICATION_IDENTITY:-}" ]]; then
   PYINSTALLER_ARGS+=(--codesign-identity "$TERRASATCH_MACOS_APPLICATION_IDENTITY")
 fi
 PYINSTALLER_ARGS+=(packaging/entrypoints/edge_cli.py)
-"$PYTHON" -m PyInstaller "${PYINSTALLER_ARGS[@]}"
+run_python -m PyInstaller "${PYINSTALLER_ARGS[@]}"
+
+FROZEN="$ROOT/dist/TerraSatchEdge/TerraSatchEdge"
+if [[ ! -x "$FROZEN" ]]; then
+  echo "PyInstaller output is missing: $FROZEN" >&2
+  exit 1
+fi
+
+FROZEN_INFO="$(file "$FROZEN")"
+echo "$FROZEN_INFO"
+case "$ARCH" in
+  arm64)
+    [[ "$FROZEN_INFO" == *"arm64"* ]] || { echo "Frozen executable is not arm64." >&2; exit 1; }
+    ;;
+  x64)
+    [[ "$FROZEN_INFO" == *"x86_64"* ]] || { echo "Frozen executable is not x86_64." >&2; exit 1; }
+    ;;
+esac
+
+FROZEN_VERSION="$($FROZEN --version)"
+if [[ "$FROZEN_VERSION" != "terrasatch-edge $VERSION" ]]; then
+  echo "Unexpected frozen CLI version: $FROZEN_VERSION" >&2
+  exit 1
+fi
 
 PKGROOT="$ROOT/release/macos-root"
 SCRIPTS="$ROOT/release/macos-scripts"
@@ -155,7 +221,7 @@ chmod 755 "$SCRIPTS/postinstall"
 mkdir -p release
 UNSIGNED="$ROOT/release/TerraSatch-Edge-${VERSION}-macOS-${ARCH}-unsigned.pkg"
 FINAL="$ROOT/release/TerraSatch-Edge-${VERSION}-macOS-${ARCH}.pkg"
-rm -f "$UNSIGNED" "$FINAL"
+rm -f "$UNSIGNED" "$FINAL" "$FINAL.sha256"
 
 pkgbuild \
   --root "$PKGROOT" \
@@ -188,6 +254,8 @@ if [[ -n "${TERRASATCH_MACOS_NOTARY_PROFILE:-}" ]]; then
 fi
 
 SHA256="$(shasum -a 256 "$FINAL" | awk '{print $1}')"
+printf '%s  %s\n' "$SHA256" "$(basename "$FINAL")" > "$FINAL.sha256"
+
 echo
 echo "Built: $FINAL"
 echo "Architecture: $ARCH"
