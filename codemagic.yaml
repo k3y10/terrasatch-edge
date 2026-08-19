@@ -1,1 +1,77 @@
-temp
+workflows:
+  macos-arm64-pilot:
+    name: TerraSatch Edge macOS arm64 pilot
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      vars:
+        PYTHON_VERSION: "3.12.10"
+        PYTHON_BIN: "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+        TERRASATCH_MACOS_TARGET_ARCH: "arm64"
+        TERRASATCH_MACOS_PYTHON_ARCH: "arm64"
+    scripts:
+      - name: Install Python 3.12 universal2
+        script: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macos11.pkg" \
+            -o /tmp/python312.pkg
+          sudo installer -pkg /tmp/python312.pkg -target /
+          file "$PYTHON_BIN"
+          arch -arm64 "$PYTHON_BIN" -c 'import platform, sys; print(sys.version); print(platform.machine())'
+      - name: Build arm64 package
+        script: |
+          set -euo pipefail
+          chmod +x scripts/build-macos.sh scripts/verify-macos-pkg.sh
+          ./scripts/build-macos.sh
+      - name: Verify arm64 package
+        script: |
+          set -euo pipefail
+          PKG="release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg"
+          ./scripts/verify-macos-pkg.sh "$PKG" arm64 0.2.2 | tee release/macos-arm64-verification.txt
+          curl -fsS https://api.terrasatch.com/health | tee release/macos-api-health.json
+    artifacts:
+      - release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
+      - release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg.sha256
+      - release/macos-arm64-*.txt
+      - release/macos-arm64-*.json
+      - release/macos-api-health.json
+
+  macos-x64-pilot:
+    name: TerraSatch Edge macOS Intel x64 pilot
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    environment:
+      vars:
+        PYTHON_VERSION: "3.12.10"
+        PYTHON_BIN: "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+        TERRASATCH_MACOS_TARGET_ARCH: "x64"
+        TERRASATCH_MACOS_PYTHON_ARCH: "x86_64"
+    scripts:
+      - name: Enable Rosetta and install Python 3.12 universal2
+        script: |
+          set -euo pipefail
+          sudo softwareupdate --install-rosetta --agree-to-license || true
+          curl -fsSL \
+            "https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macos11.pkg" \
+            -o /tmp/python312.pkg
+          sudo installer -pkg /tmp/python312.pkg -target /
+          file "$PYTHON_BIN"
+          arch -x86_64 "$PYTHON_BIN" -c 'import platform, sys; print(sys.version); print(platform.machine())'
+      - name: Build Intel x64 package
+        script: |
+          set -euo pipefail
+          chmod +x scripts/build-macos.sh scripts/verify-macos-pkg.sh
+          ./scripts/build-macos.sh
+      - name: Verify Intel x64 package
+        script: |
+          set -euo pipefail
+          PKG="release/TerraSatch-Edge-0.2.2-macOS-x64.pkg"
+          ./scripts/verify-macos-pkg.sh "$PKG" x64 0.2.2 | tee release/macos-x64-verification.txt
+          curl -fsS https://api.terrasatch.com/health | tee release/macos-api-health.json
+    artifacts:
+      - release/TerraSatch-Edge-0.2.2-macOS-x64.pkg
+      - release/TerraSatch-Edge-0.2.2-macOS-x64.pkg.sha256
+      - release/macos-x64-*.txt
+      - release/macos-x64-*.json
+      - release/macos-api-health.json
