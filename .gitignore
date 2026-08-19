@@ -4,8 +4,12 @@ __pycache__/
 .Python
 .venv/
 venv/
+.build-venv/
+.build-venv-*/
 dist/
 build/
+release/
+*.spec
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
