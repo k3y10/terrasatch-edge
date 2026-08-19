@@ -1,0 +1,18 @@
+<service>
+  <id>TerraSatchEdge</id>
+  <name>TerraSatch Edge</name>
+  <description>TerraSatch field-device agent for hardware inventory, connectivity, radio intelligence and remote configuration.</description>
+  <executable>%BASE%\Edge\TerraSatchEdge.exe</executable>
+  <arguments>run</arguments>
+  <workingdirectory>%BASE%\Edge</workingdirectory>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>20 sec</stoptimeout>
+  <logpath>%ProgramData%\TerraSatch\Edge\state\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

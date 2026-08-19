@@ -4,8 +4,12 @@ __pycache__/
 .Python
 .venv/
 venv/
+.build-venv/
+.build-venv-*/
 dist/
 build/
+release/
+*.spec
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
@@ -15,3 +19,12 @@ htmlcov/
 *.log
 .DS_Store
 Thumbs.db
+
+# Windows pilot build vendor binaries are staged locally, not committed by default.
+packaging/windows/vendor/TerraSatchEdgeService.exe
+packaging/windows/vendor/rtl-sdr/*
+!packaging/windows/vendor/rtl-sdr/README.md
+
+# Generated Windows branding artifact. The build derives this from the approved
+# Satchy artwork or an explicit TERRASATCH_EDGE_ICON override.
+packaging/windows/assets/TerraSatchEdge.ico

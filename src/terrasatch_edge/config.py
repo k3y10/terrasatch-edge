@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -13,22 +15,24 @@ APP_NAME = "TerraSatchEdge"
 
 def _default_config_dir() -> Path:
     if os.name == "nt":
-        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        return base / APP_NAME
+        base = Path(os.environ.get("PROGRAMDATA", Path.home() / "AppData" / "Local"))
+        return base / "TerraSatch" / "Edge"
     xdg = os.environ.get("XDG_CONFIG_HOME")
     return Path(xdg) / "terrasatch-edge" if xdg else Path.home() / ".config" / "terrasatch-edge"
 
 
 def _default_state_dir() -> Path:
     if os.name == "nt":
-        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        return base / APP_NAME
+        base = Path(os.environ.get("PROGRAMDATA", Path.home() / "AppData" / "Local"))
+        return base / "TerraSatch" / "Edge" / "state"
     xdg = os.environ.get("XDG_STATE_HOME")
     return Path(xdg) / "terrasatch-edge" if xdg else Path.home() / ".local" / "state" / "terrasatch-edge"
 
 
 class EdgeConfig(BaseModel):
     api_url: str = "https://api.terrasatch.com"
+    device_id: str | None = None
+    organization_id: str | None = None
     site_id: str | None = None
     site_name: str | None = None
     node_name: str | None = None
@@ -49,6 +53,8 @@ class Paths:
     config_file: Path
     credentials_file: Path
     snapshot_file: Path
+    remote_config_file: Path
+    log_dir: Path
 
 
 def get_paths() -> Paths:
@@ -60,6 +66,8 @@ def get_paths() -> Paths:
         config_file=config_dir / "config.json",
         credentials_file=config_dir / "credentials.json",
         snapshot_file=state_dir / "hardware-snapshot.json",
+        remote_config_file=state_dir / "remote-config.json",
+        log_dir=state_dir / "logs",
     )
 
 
@@ -70,6 +78,28 @@ def _ensure_parent(path: Path) -> None:
 def _tighten_permissions(path: Path) -> None:
     if os.name != "nt":
         path.chmod(0o600)
+        return
+    username = os.environ.get("USERNAME")
+    if not username:
+        return
+    try:
+        subprocess.run(
+            [
+                "icacls",
+                str(path),
+                "/inheritance:r",
+                "/grant:r",
+                f"{username}:(F)",
+                "SYSTEM:(F)",
+                "Administrators:(F)",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def _env_bool(name: str) -> bool | None:
@@ -81,6 +111,10 @@ def _env_bool(name: str) -> bool | None:
 
 def load_config() -> EdgeConfig:
     paths = get_paths()
+    env_api = os.environ.get("TERRASATCH_EDGE_API_URL")
+    env_site = os.environ.get("TERRASATCH_EDGE_SITE_ID")
+    env_interval = os.environ.get("TERRASATCH_EDGE_SCAN_INTERVAL_SECONDS")
+
     data: dict[str, object] = {}
     if paths.config_file.exists():
         try:
@@ -88,9 +122,14 @@ def load_config() -> EdgeConfig:
         except (json.JSONDecodeError, OSError):
             data = {}
 
+    if env_api:
+        data["api_url"] = env_api
+    if env_site:
+        data["site_id"] = env_site
+    if env_interval:
+        data["scan_interval_seconds"] = int(env_interval)
+
     string_overrides = {
-        "api_url": "TERRASATCH_EDGE_API_URL",
-        "site_id": "TERRASATCH_EDGE_SITE_ID",
         "speech_model": "TERRASATCH_EDGE_SPEECH_MODEL",
         "speech_device": "TERRASATCH_EDGE_SPEECH_DEVICE",
         "speech_compute_type": "TERRASATCH_EDGE_SPEECH_COMPUTE_TYPE",
@@ -100,10 +139,6 @@ def load_config() -> EdgeConfig:
         raw = os.environ.get(env_name)
         if raw:
             data[field_name] = raw.strip()
-
-    env_interval = os.environ.get("TERRASATCH_EDGE_SCAN_INTERVAL_SECONDS")
-    if env_interval:
-        data["scan_interval_seconds"] = int(env_interval)
 
     for field_name, env_name in (
         ("speech_vad_filter", "TERRASATCH_EDGE_SPEECH_VAD_FILTER"),
@@ -158,3 +193,22 @@ def clear_api_key() -> None:
     path = get_paths().credentials_file
     if path.exists():
         path.unlink()
+
+
+def save_remote_config(payload: dict[str, Any]) -> Path:
+    path = get_paths().remote_config_file
+    _ensure_parent(path)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _tighten_permissions(path)
+    return path
+
+
+def load_remote_config() -> dict[str, Any]:
+    path = get_paths().remote_config_file
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}

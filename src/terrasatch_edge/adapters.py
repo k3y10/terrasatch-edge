@@ -18,13 +18,21 @@ RULES = (
         name="RTL-SDR / Nooelec",
         terms=("rtl283", "rtl-sdr", "nooelec", "nesdr", "realtek 2838"),
         kind=DeviceKind.SDR,
-        capabilities=("radio_rx", "iq_stream", "fm_demodulation"),
+        capabilities=(
+            "iq_stream",
+            "fm_demodulation",
+            "rtl-sdr",
+            "nooelec",
+        ),
     ),
     AdapterRule(
         name="HackRF",
         terms=("hackrf",),
         kind=DeviceKind.SDR,
-        capabilities=("radio_rx", "radio_tx", "iq_stream"),
+        capabilities=(
+            "hardware:hackrf",
+            "hackrf",
+        ),
     ),
     AdapterRule(
         name="GPS / NMEA",

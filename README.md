@@ -1,137 +1,68 @@
 # TerraSatch Edge
 
-**Local field-device agent and setup wizard for TerraSatch.**
+**Cross-platform field-device runtime for TerraSatch.**
 
-TerraSatch Edge runs on the field computer—not on the TerraSatch Oracle server. It discovers local hardware, validates the machine, connects the device to `https://api.terrasatch.com`, saves local health snapshots, and provides the client-side bridge for future TerraListen radio/audio, GPS, sensors, and other field hardware.
+TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
-> Current release: **v0.1.0 foundation**
+> Current development milestone: **v0.2.2 native compatibility pilot**  
+> Current public Windows build: **v0.2.1**
 
-## Architecture
+## Pilot architecture
 
 ```text
-Field hardware
-    │
-    ├── RTL-SDR / Nooelec
-    ├── radio audio interface
-    ├── GPS / GNSS / NMEA
-    ├── serial devices
-    └── network interfaces
-    │
-    ▼
-TerraSatch Edge
-    ├── setup wizard
-    ├── hardware discovery
-    ├── adapter classification
-    ├── diagnostics
-    ├── local snapshots
-    ├── optional localhost UI
-    └── TerraSatch API client
-    │
-    ▼
-https://api.terrasatch.com
-    ├── auth
-    ├── organizations/sites
-    ├── transmissions
-    ├── TerraListen pipeline
-    └── operational events
+Nooelec / RTL-SDR   USB audio   GPS / serial   Network
+          \            |            |            /
+                      Edge
+                       |
+               pairing + heartbeat
+                       |
+              api.terrasatch.com
+                       |
+                  TerraListen / Satchy
 ```
 
-## What works in v0.1.0
+## v0.2.2 development capabilities
 
-- Windows and Linux-friendly Python 3.12+ package
-- interactive `terrasatch-edge setup` wizard
-- validation against the live TerraSatch API
-- service API key authentication using the current API contract
-- TerraSatch site discovery and selection
-- system inventory: OS, architecture, CPU, RAM, disk
-- serial/COM port discovery
-- USB discovery through PyUSB when available
-- Linux `lsusb` discovery fallback
-- Windows PnP discovery through PowerShell
-- network interface inventory
-- RTL-SDR / Nooelec classification
-- HackRF classification
-- GPS/GNSS/NMEA classification
-- USB audio classification rules
-- optional SDR probes through `rtl_test`, `hackrf_info`, and `SoapySDRUtil`
-- local diagnostic command
-- local hardware snapshot persistence
-- long-running Edge loop with API health checks
-- live test ingestion through the existing `/api/v1/transmissions` endpoint
-- optional local status UI at `http://127.0.0.1:8742`
-- Linux and Windows installation scripts
-- systemd unit template for Linux field nodes
+- Windows, macOS and Linux shared runtime
+- browser/device-code pairing against the TerraSatch Edge control plane
+- organization/site assignment in TerraSatch Admin
+- device-scoped credential provisioning
+- hardware discovery and classification
+- Nooelec / RTL-SDR recognition
+- RTL receive readiness reporting aligned with the current API (`rtl_test` + `rtl_fm`)
+- finite receive-only IQ diagnostic probe when `rtl_sdr` is available
+- HackRF discovery without falsely advertising RX/TX before a provider adapter exists
+- GPS/GNSS, serial, USB audio and network inventory
+- periodic Edge heartbeat and hardware inventory sync
+- remote Edge configuration retrieval
+- running services can pick up pairing/config changes without reinstalling
+- local diagnostics and status UI
+- production-style test transmission ingestion
+- native packaging for Windows, macOS and Debian/Ubuntu
 
-## Intentionally not implemented yet
-
-These need corresponding API/backend or device-specific work and should be added as separate phases:
-
-- browser/device-code account pairing
-- cloud device registry
-- remote Edge heartbeats and hardware inventory API
-- automatic API key provisioning
-- direct RTL-SDR demodulation/audio capture
-- BCA radio audio capture/transcription
-- channel/frequency configuration UI
-- GPS NMEA stream ingestion
-- local offline event queue and replay
-- signed/self-updating binaries
-- Windows service registration
-- per-device remote configuration
-
-The first version deliberately uses the **existing TerraSatch service API key** flow so Edge can connect to the production API before the new device-control endpoints are deployed.
-
-## Requirements
-
-- Python **3.12+**
-- Internet access to `https://api.terrasatch.com`
-- a TerraSatch service API key
-- a site assigned to the key's organization for transmission ingestion
-
-For actual ingestion, the service key should include the API's appropriate Edge ingestion scope (currently `edge:ingest`). Read access may also be needed for site selection depending on how the key is provisioned.
-
-## Install from a checkout
-
-### Linux
-
-```bash
-./scripts/install.sh
-```
-
-Then:
+## Pair a development checkout
 
 ```bash
 terrasatch-edge setup
-terrasatch-edge doctor
-terrasatch-edge status
 ```
 
-### Windows PowerShell
+The preferred setup flow:
 
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\install.ps1
-```
+1. checks `api.terrasatch.com`
+2. scans local hardware
+3. creates an Edge pairing request
+4. prints and optionally opens the TerraSatch Admin verification URL
+5. waits while the operator chooses organization + site
+6. claims the issued device credential
+7. sends the first hardware heartbeat
 
-The installer prints the full path of the generated executable. After a packaged Windows installer is added, this will become a normal `TerraSatch-Edge-Setup.exe` flow.
-
-## Developer install
+Manual service keys remain available only as an advanced fallback:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev,serial,usb,ui]'
+terrasatch-edge setup --api-key "$TERRASATCH_EDGE_API_KEY" --site-id "<uuid>"
 ```
 
-Windows:
-
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev,serial,usb,ui]"
-```
-
-## CLI
+## Useful commands
 
 ```text
 terrasatch-edge setup
@@ -139,245 +70,67 @@ terrasatch-edge scan
 terrasatch-edge devices
 terrasatch-edge status
 terrasatch-edge doctor
-terrasatch-edge ingest-text "Wind loading visible near the ridgeline" --callsign "Patrol 4"
 terrasatch-edge run --once
 terrasatch-edge run
 terrasatch-edge ui
+terrasatch-edge ingest-text "Wind loading near the ridgeline" --callsign "Field Test 1"
 terrasatch-edge paths
 terrasatch-edge logout
-terrasatch-edge version
 ```
 
-`tsedge` is also installed as a shorter alias.
+The local UI binds to `127.0.0.1:8742` by default.
 
-## Setup wizard
+## Native pilot builds
 
-Run:
+See [`docs/NATIVE_BUILDS.md`](docs/NATIVE_BUILDS.md) for the current macOS/Linux build, service, signing and clean-machine validation flow. Windows-specific details remain in [`docs/PILOT_BUILD.md`](docs/PILOT_BUILD.md).
 
-```bash
-terrasatch-edge setup
+Windows:
+
+```powershell
+.\scripts\build-windows.ps1
 ```
 
-The wizard:
-
-1. checks `api.terrasatch.com`
-2. scans the local machine
-3. asks for the TerraSatch service API key using hidden input
-4. validates it through `/api/v1/auth/me`
-5. lists available TerraSatch sites
-6. lets the user choose a site
-7. names the local Edge node
-8. stores local configuration and credentials
-9. directs the user to `terrasatch-edge doctor`
-
-Non-interactive provisioning is also supported:
-
-```bash
-terrasatch-edge setup \
-  --api-url https://api.terrasatch.com \
-  --api-key "$TERRASATCH_EDGE_API_KEY" \
-  --site-id "<site-uuid>" \
-  --non-interactive
-```
-
-For automated deployments, prefer passing the key through the `TERRASATCH_EDGE_API_KEY` environment variable rather than placing it in shell history.
-
-## Hardware scan
-
-```bash
-terrasatch-edge scan
-```
-
-Machine-readable output:
-
-```bash
-terrasatch-edge scan --json
-```
-
-The scanner is designed to be **best effort**. A driver can be installed correctly even when an optional probe tool is not. `terrasatch-edge doctor` explains what Edge can currently see and which additional driver/tool would improve detection.
-
-## Diagnostics
-
-```bash
-terrasatch-edge doctor
-```
-
-Checks currently include:
-
-- config
-- credentials
-- API reachability
-- authentication
-- SDR recognition
-- GPS recognition
-- radio/audio-adjacent hardware
-- optional SDR command-line tools
-
-## Test the existing TerraSatch API pipeline
-
-Once setup has selected a site:
-
-```bash
-terrasatch-edge ingest-text \
-  "Wind loading is visible near the ridgeline on the east aspect around 9800 feet." \
-  --callsign "Patrol 4"
-```
-
-This uses the current production-style TerraSatch transmission ingestion path. It is useful for validating an Edge machine/account before direct radio audio support is connected.
-
-## Local interface
-
-Install the UI extra and run:
-
-```bash
-terrasatch-edge ui
-```
-
-Open:
+produces:
 
 ```text
-http://127.0.0.1:8742
+release\TerraSatch-Edge-Setup-x64.exe
 ```
 
-The first UI is intentionally local-only. It shows:
+The validated v0.2.1 Windows pilot remains published from `www.terrasatch.com/downloads`. The next Windows rebuild should be v0.2.2 so it picks up the same current-API capability policy as the macOS/Linux development train.
 
-- Edge node
-- API status
-- authentication status
-- selected site
-- detected hardware
-- hardware capabilities
-- API health details
-
-Do **not** bind the current local UI to a public interface without adding authentication and TLS controls.
-
-## Background agent
-
-One cycle:
+macOS:
 
 ```bash
-terrasatch-edge run --once
+./scripts/build-macos.sh
 ```
 
-Persistent:
+The native package installs `com.terrasatch.edge` as a LaunchDaemon. New native packages derive v0.2.2 from the source package. The public download remains disabled until Apple Silicon/Intel artifacts are built and validated. Broad distribution requires Developer ID signing and notarization.
+
+Linux:
 
 ```bash
-terrasatch-edge run
+./scripts/build-linux-deb.sh
 ```
 
-The current loop scans local hardware, persists a snapshot, and checks API health. It does not pretend a cloud heartbeat endpoint exists yet. Once the API adds Edge registry/heartbeat endpoints, the same loop becomes the remote device-health channel.
+The Debian/Ubuntu package installs a persistent systemd service and uses the same system registration for CLI + service. New native packages derive v0.2.2 from the source package. The public download remains disabled until amd64/arm64 artifacts are built and validated.
 
-## Configuration locations
+PyInstaller builds must be run on the operating system and architecture being packaged. The target user's machine does not need a Python installation.
 
-Run:
+## Receiver status
 
-```bash
-terrasatch-edge paths
-```
+Hardware inventory and provider readiness are separate on purpose. A Nooelec/RTL-SDR can be identified before its receive tooling is ready, but the control plane receives `radio:receive` / `audio:capture` only when the required RTL receive utilities are present. HackRF is discovery-only until a TerraListen provider adapter actually implements its receive/transmit path.
 
-Linux defaults:
+The standalone Edge runtime still needs the next operational adapter phase to continuously tune configured channels, segment live radio audio, and feed those captures into TerraListen/Satchy. The API-side radio policy and bounded RTL capture work can be used as the contract for that phase.
 
-```text
-~/.config/terrasatch-edge/config.json
-~/.config/terrasatch-edge/credentials.json
-~/.local/state/terrasatch-edge/hardware-snapshot.json
-```
+## Security
 
-Windows defaults use `%APPDATA%\TerraSatchEdge` and `%LOCALAPPDATA%\TerraSatchEdge`.
+- device pairing avoids distributing reusable organization service keys
+- paired credentials are tenant scoped by the API
+- Windows pilot files are ACL-hardened under ProgramData
+- POSIX system packages keep config/state root-owned and require `sudo` for setup/status/doctor
+- the local UI stays loopback-only by default
+- production public installers should be code-signed/notarized before broad distribution
 
-On POSIX systems, TerraSatch Edge applies mode `0600` to config and credential files. A future Windows build should move credentials into Windows Credential Manager/DPAPI before broad customer distribution.
+## No hosted CI required
 
-## API compatibility
-
-TerraSatch Edge v0.1.0 intentionally uses API functionality that already exists:
-
-```text
-GET  /health
-GET  /api/v1/auth/me
-GET  /api/v1/sites
-POST /api/v1/transmissions
-```
-
-Planned API additions for the next phase:
-
-```text
-POST /api/v1/edge/device-codes
-POST /api/v1/edge/device-tokens
-POST /api/v1/edge/nodes/{node_id}/heartbeat
-PUT  /api/v1/edge/nodes/{node_id}/inventory
-GET  /api/v1/edge/nodes/{node_id}/configuration
-```
-
-Those names are a proposed contract, not a statement that the current production API already exposes them.
-
-## Security notes
-
-- Never commit TerraSatch API keys.
-- Use tenant-scoped service credentials.
-- Give Edge only the scopes it needs.
-- Keep the localhost UI bound to `127.0.0.1` until it has its own auth layer.
-- Treat radio recordings, transcripts, operational events, and precise field locations as operational data subject to each partner's retention/access policy.
-- Use signed installers and update manifests before distributing Edge broadly outside controlled pilots.
-
-## No GitHub Actions required
-
-This repository does **not** include GitHub Actions workflows. Local tests/linting are sufficient for the current pilot phase and avoid adding hosted CI usage.
-
-## Development checks
-
-```bash
-python -m pip install -e '.[dev]'
-pytest
-ruff check src tests
-```
-
-## Near-term roadmap
-
-### Phase 1 — Foundation (this repository)
-
-- setup wizard
-- API auth
-- hardware scan
-- diagnostics
-- local UI
-- local agent loop
-
-### Phase 2 — TerraSatch API Edge control plane
-
-- node registration
-- browser pairing codes
-- scoped Edge token issuance
-- heartbeats
-- inventory
-- remote configuration
-
-### Phase 3 — TerraListen radio adapters
-
-- RTL-SDR/Nooelec capture
-- frequency/channel profiles
-- radio audio input
-- VAD
-- clip buffering
-- transmission upload
-- transcript/event mapping
-
-### Phase 4 — Field adapters
-
-- GPS/NMEA
-- weather stations
-- drone telemetry
-- LoRa/Meshtastic
-- serial sensors
-- additional SDR families
-
-### Phase 5 — Distribution
-
-- Windows installer
-- signed binaries
-- Linux packages
-- automatic updater
-- support bundle export
-
----
-
-**TerraSatch Edge** is the field-side bridge between physical equipment and the TerraSatch API.
+This repository intentionally does not require GitHub Actions. Pilot build/test scripts run locally so they do not add hosted Actions usage.

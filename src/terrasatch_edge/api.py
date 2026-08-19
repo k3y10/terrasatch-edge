@@ -5,11 +5,54 @@ from typing import Any
 import httpx
 
 from . import __version__
-from .models import ApiIdentity, SiteSummary
+from .models import ApiIdentity, EdgeDevice, PairingClaim, PairingStart, SiteSummary, SystemSnapshot
+from .tooling import find_executable
 
 
 class TerraSatchApiError(RuntimeError):
     pass
+
+
+_RADIO_CAPABILITY_ALIASES = {
+    "radio_rx",
+    "radio_tx",
+    "radio:receive",
+    "radio:rx",
+    "radio:transmit",
+    "radio:tx",
+    "rx",
+    "tx",
+    "receive",
+    "transmit",
+    "ptt",
+    "audio:capture",
+}
+
+
+def reported_capabilities(snapshot: SystemSnapshot) -> list[str]:
+    capabilities: set[str] = set()
+    rtl_detected = False
+    direct_audio_detected = False
+
+    for device in snapshot.devices:
+        device_capabilities = {str(item) for item in device.capabilities}
+        normalized = {item.lower() for item in device_capabilities}
+        rtl_detected = rtl_detected or bool({"rtl-sdr", "nooelec"} & normalized)
+        direct_audio_detected = direct_audio_detected or "audio_input" in normalized
+        for capability in device_capabilities:
+            if capability.lower() not in _RADIO_CAPABILITY_ALIASES:
+                capabilities.add(capability)
+
+    rtl_receive_ready = (
+        rtl_detected
+        and find_executable("rtl_test") is not None
+        and find_executable("rtl_fm") is not None
+    )
+    if rtl_receive_ready:
+        capabilities.update({"radio:receive", "audio:capture"})
+    if direct_audio_detected:
+        capabilities.add("audio:capture")
+    return sorted(capabilities)
 
 
 class TerraSatchApiClient:
@@ -81,6 +124,60 @@ class TerraSatchApiClient:
                     )
                 )
         return sites
+
+    def start_pairing(
+        self,
+        *,
+        name: str,
+        hostname: str,
+        platform_name: str,
+        architecture: str,
+    ) -> PairingStart:
+        response = self._request(
+            "POST",
+            "/api/v1/edge/pairings",
+            json={
+                "name": name,
+                "hostname": hostname,
+                "platform": platform_name,
+                "architecture": architecture,
+                "agent_version": __version__,
+            },
+        )
+        return PairingStart.model_validate(response.json())
+
+    def claim_pairing(self, device_code: str) -> PairingClaim:
+        response = self._request(
+            "POST",
+            "/api/v1/edge/pairings/token",
+            json={"device_code": device_code},
+        )
+        return PairingClaim.model_validate(response.json())
+
+    def edge_me(self) -> EdgeDevice:
+        return EdgeDevice.model_validate(self._request("GET", "/api/v1/edge/me").json())
+
+    def heartbeat(self, snapshot: SystemSnapshot) -> dict[str, Any]:
+        capabilities = reported_capabilities(snapshot)
+        inventory = [device.model_dump(mode="json") for device in snapshot.devices]
+        response = self._request(
+            "POST",
+            "/api/v1/edge/heartbeat",
+            json={
+                "agent_version": __version__,
+                "hardware_inventory": inventory,
+                "capabilities": capabilities,
+            },
+        )
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {"data": payload}
+
+    def remote_config(self) -> dict[str, Any]:
+        response = self._request("GET", "/api/v1/edge/config")
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise TerraSatchApiError("Unexpected /api/v1/edge/config response")
+        return payload
 
     def ingest_text(
         self,

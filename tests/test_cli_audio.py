@@ -1,6 +1,6 @@
 from typer.testing import CliRunner
 
-from terrasatch_edge.cli import app
+from terrasatch_edge.entrypoint import app
 
 
 runner = CliRunner()
