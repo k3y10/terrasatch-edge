@@ -26,6 +26,15 @@ def test_windows_setup_uses_production_api_environment_contract() -> None:
     assert "$EdgeExe --version" in script
 
 
+def test_windows_service_forces_utf8_for_redirected_logs() -> None:
+    service_xml = (
+        ROOT / "packaging" / "windows" / "TerraSatchEdgeService.xml"
+    ).read_text(encoding="utf-8")
+
+    assert '<env name="PYTHONUTF8" value="1"/>' in service_xml
+    assert '<env name="PYTHONIOENCODING" value="utf-8"/>' in service_xml
+
+
 def test_edge_env_example_points_at_production_https() -> None:
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
 

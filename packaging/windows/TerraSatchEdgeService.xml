@@ -5,6 +5,8 @@
   <executable>%BASE%\Edge\TerraSatchEdge.exe</executable>
   <arguments>run</arguments>
   <workingdirectory>%BASE%\Edge</workingdirectory>
+  <env name="PYTHONUTF8" value="1"/>
+  <env name="PYTHONIOENCODING" value="utf-8"/>
   <startmode>Automatic</startmode>
   <onfailure action="restart" delay="10 sec"/>
   <onfailure action="restart" delay="30 sec"/>
