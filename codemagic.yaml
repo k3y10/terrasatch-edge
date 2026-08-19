@@ -10,6 +10,10 @@ workflows:
         TERRASATCH_MACOS_TARGET_ARCH: "arm64"
         TERRASATCH_MACOS_PYTHON_ARCH: "arm64"
     scripts:
+      - name: Validate macOS build scripts
+        script: |
+          set -euo pipefail
+          bash -n scripts/build-macos.sh scripts/verify-macos-pkg.sh
       - name: Install Python 3.12 universal2
         script: |
           set -euo pipefail
@@ -48,6 +52,10 @@ workflows:
         TERRASATCH_MACOS_TARGET_ARCH: "x64"
         TERRASATCH_MACOS_PYTHON_ARCH: "x86_64"
     scripts:
+      - name: Validate macOS build scripts
+        script: |
+          set -euo pipefail
+          bash -n scripts/build-macos.sh scripts/verify-macos-pkg.sh
       - name: Enable Rosetta and install Python 3.12 universal2
         script: |
           set -euo pipefail
