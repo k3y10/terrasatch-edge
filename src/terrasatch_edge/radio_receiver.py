@@ -214,7 +214,10 @@ def capture_one_transmission(
                             peak_rms=peak_rms,
                             source_message_id=source_message_id,
                         )
-                timeout = min(settings.end_gap_seconds, 0.5)
+                timeout = min(
+                    settings.end_gap_seconds,
+                    max(settings.max_transmission_seconds - elapsed, 0.01),
+                )
 
             try:
                 chunk = chunks.get(timeout=timeout)
