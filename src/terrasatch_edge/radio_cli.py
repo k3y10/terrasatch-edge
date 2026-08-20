@@ -15,6 +15,7 @@ from rich.table import Table
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .config import get_paths, load_api_key, load_config
 from .ingest import ingest_audio_file
+from .radio_calibration import RadioCalibrationError, auto_calibrate_radio
 from .radio_profiles import (
     BCA_FRS_NA_PROFILE,
     BCA_PRIVACY_CODE_COUNT,
@@ -42,6 +43,10 @@ def _capture_path(channel: int) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     return root / f"bca-ch{channel:02d}-{stamp}-{uuid.uuid4().hex[:8]}.wav"
+
+
+def _gain_label(gain_db: float | None) -> str:
+    return "tuner auto" if gain_db is None else f"{gain_db:g} dB"
 
 
 def register_radio_commands(app: typer.Typer) -> None:
@@ -99,13 +104,30 @@ def register_radio_commands(app: typer.Typer) -> None:
                 help="Seconds to wait for a carrier-gated call before returning an error.",
             ),
         ] = None,
+        auto_calibrate: Annotated[
+            bool,
+            typer.Option(
+                "--auto-calibrate/--no-auto-calibrate",
+                help="Automatically learn a quiet RF gain/squelch baseline before listening.",
+            ),
+        ] = True,
         squelch: Annotated[
             int | None,
-            typer.Option("--squelch", min=1, max=100, help="rtl_fm squelch threshold."),
+            typer.Option(
+                "--squelch",
+                min=1,
+                max=100,
+                help="Advanced squelch override; auto-calibration chooses this by default.",
+            ),
         ] = None,
         gain_db: Annotated[
             float | None,
-            typer.Option("--gain-db", min=0, max=60, help="Optional fixed RTL-SDR gain in dB."),
+            typer.Option(
+                "--gain-db",
+                min=0,
+                max=60,
+                help="Advanced tuner-gain override; auto-calibration chooses this by default.",
+            ),
         ] = None,
     ) -> None:
         """Receive BCA radio traffic through Nooelec/RTL-SDR and ingest it into TerraSatch."""
@@ -132,6 +154,65 @@ def register_radio_commands(app: typer.Typer) -> None:
             console.print("[red]No site assigned. Pair Edge again before radio ingestion.[/red]")
             raise typer.Exit(2)
 
+        base_settings = RadioReceiveSettings(
+            channel=selected_channel,
+            output_sample_rate=config.radio_output_sample_rate,
+            demod_sample_rate=config.radio_demod_sample_rate,
+            rtl_squelch=config.radio_squelch,
+            rtl_squelch_delay=config.radio_squelch_delay,
+            gain_db=config.radio_gain_db,
+            read_chunk_seconds=config.radio_chunk_seconds,
+            end_gap_seconds=config.radio_silence_seconds,
+            min_transmission_seconds=config.radio_min_transmission_seconds,
+            max_transmission_seconds=config.radio_max_transmission_seconds,
+        )
+
+        if auto_calibrate:
+            if squelch is None or gain_db is None:
+                console.print(
+                    f"[cyan]Calibrating RF environment[/cyan] for {profile.display_name}..."
+                )
+            try:
+                calibration = auto_calibrate_radio(
+                    base_settings,
+                    fixed_squelch=squelch,
+                    fixed_gain_db=gain_db,
+                )
+            except RadioCalibrationError as exc:
+                console.print(f"[red]Radio auto-calibration failed:[/red] {exc}")
+                console.print(
+                    "[dim]For diagnostics you can temporarily supply --squelch and --gain-db manually.[/dim]"
+                )
+                raise typer.Exit(3) from exc
+            settings = calibration.settings
+            if calibration.mode == "manual":
+                console.print(
+                    f"[dim]Using manual RF overrides · gain {_gain_label(settings.gain_db)} · "
+                    f"squelch {settings.rtl_squelch}[/dim]"
+                )
+            else:
+                console.print(
+                    f"[green]✓ RF calibrated[/green] · gain {_gain_label(settings.gain_db)} · "
+                    f"squelch {settings.rtl_squelch} · {calibration.attempts} probe(s)"
+                )
+        else:
+            settings = RadioReceiveSettings(
+                channel=selected_channel,
+                output_sample_rate=config.radio_output_sample_rate,
+                demod_sample_rate=config.radio_demod_sample_rate,
+                rtl_squelch=squelch if squelch is not None else config.radio_squelch,
+                rtl_squelch_delay=config.radio_squelch_delay,
+                gain_db=gain_db if gain_db is not None else config.radio_gain_db,
+                read_chunk_seconds=config.radio_chunk_seconds,
+                end_gap_seconds=config.radio_silence_seconds,
+                min_transmission_seconds=config.radio_min_transmission_seconds,
+                max_transmission_seconds=config.radio_max_transmission_seconds,
+            )
+            console.print(
+                f"[yellow]RF auto-calibration disabled[/yellow] · gain {_gain_label(settings.gain_db)} · "
+                f"squelch {settings.rtl_squelch}"
+            )
+
         provider = FasterWhisperSpeechProvider(
             model_name=config.speech_model,
             device=config.speech_device,
@@ -140,18 +221,6 @@ def register_radio_commands(app: typer.Typer) -> None:
             local_files_only=config.speech_local_files_only,
         )
         client = TerraSatchApiClient(config.api_url, key)
-        settings = RadioReceiveSettings(
-            channel=selected_channel,
-            output_sample_rate=config.radio_output_sample_rate,
-            demod_sample_rate=config.radio_demod_sample_rate,
-            rtl_squelch=squelch if squelch is not None else config.radio_squelch,
-            rtl_squelch_delay=config.radio_squelch_delay,
-            gain_db=gain_db if gain_db is not None else config.radio_gain_db,
-            read_chunk_seconds=config.radio_chunk_seconds,
-            end_gap_seconds=config.radio_silence_seconds,
-            min_transmission_seconds=config.radio_min_transmission_seconds,
-            max_transmission_seconds=config.radio_max_transmission_seconds,
-        )
 
         console.print(
             f"[green]Listening[/green] {profile.display_name} with Nooelec/RTL-SDR receive only."
