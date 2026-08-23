@@ -78,24 +78,50 @@ def test_config_update_preserves_pairing_assignment(tmp_path, monkeypatch):
     assert saved.site_name == "Field Site"
 
 
-def test_config_update_rejects_non_http_api_url(tmp_path, monkeypatch):
+def test_config_update_cannot_redirect_api_target(tmp_path, monkeypatch):
     _configure_paths(tmp_path, monkeypatch)
-    save_config(EdgeConfig())
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
 
     client = TestClient(local_ui.build_app())
     response = client.put(
         "/api/config",
         headers=OPERATOR_HEADERS,
-        json={"api_url": "file:///tmp/not-an-api"},
+        json={"api_url": "https://example.invalid"},
     )
 
     assert response.status_code == 422
     assert load_config().api_url == "https://api.terrasatch.com"
 
 
+def test_status_payload_does_not_expose_remote_config_or_identity(tmp_path, monkeypatch):
+    _configure_paths(tmp_path, monkeypatch)
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+    monkeypatch.setattr(local_ui, "scan_hardware", lambda include_network=False: _snapshot())
+
+    class FakeClient:
+        def __init__(self, base_url: str, api_key: str | None = None, timeout: float = 10.0) -> None:
+            self.base_url = base_url
+            self.api_key = api_key
+
+        def health(self) -> dict[str, str]:
+            return {"status": "ok"}
+
+    monkeypatch.setattr(local_ui, "TerraSatchApiClient", FakeClient)
+
+    payload = local_ui._status_payload()
+    assert "remote_config" not in payload
+    assert "identity_detail" not in payload
+
+
 def test_pairing_claim_saves_device_credential_and_assignment(tmp_path, monkeypatch):
     _configure_paths(tmp_path, monkeypatch)
-    save_config(EdgeConfig(api_url="https://api.terrasatch.com", node_name="edge-test"))
+    save_config(
+        EdgeConfig(
+            api_url="https://api.terrasatch.com",
+            node_name="edge-test",
+            site_name="Stale Site Name",
+        )
+    )
     monkeypatch.setattr(local_ui, "scan_hardware", lambda include_network=False: _snapshot())
 
     device = EdgeDevice(
@@ -136,4 +162,5 @@ def test_pairing_claim_saves_device_credential_and_assignment(tmp_path, monkeypa
     assert saved.device_id == "device-2"
     assert saved.organization_id == "org-2"
     assert saved.site_id == "site-2"
+    assert saved.site_name is None
     assert saved.node_name == "paired-edge"
