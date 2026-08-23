@@ -6,7 +6,7 @@ import socket
 from dataclasses import asdict
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__
 from .api import TerraSatchApiClient, TerraSatchApiError
@@ -16,7 +16,6 @@ from .config import (
     get_paths,
     load_api_key,
     load_config,
-    load_remote_config,
     save_api_key,
     save_config,
 )
@@ -25,7 +24,8 @@ from .doctor import run_doctor
 
 
 class ConfigUpdate(BaseModel):
-    api_url: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
     node_name: str | None = None
     scan_interval_seconds: int | None = Field(default=None, ge=5, le=3600)
     source: str | None = None
@@ -38,6 +38,8 @@ class ConfigUpdate(BaseModel):
 
 
 class PairingClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     device_code: str
 
 
@@ -48,7 +50,6 @@ def _status_payload() -> dict[str, Any]:
     api_ok = False
     auth_ok = False
     api_detail: dict[str, Any] = {}
-    identity_detail: dict[str, Any] = {}
 
     try:
         api_detail = client.health()
@@ -58,15 +59,14 @@ def _status_payload() -> dict[str, Any]:
 
     if key and api_ok:
         try:
-            edge = client.edge_me()
-            identity_detail = edge.model_dump(mode="json")
+            client.edge_me()
             auth_ok = True
         except TerraSatchApiError:
             try:
-                identity_detail = client.identity().raw
+                client.identity()
                 auth_ok = True
-            except TerraSatchApiError as exc:
-                identity_detail = {"error": str(exc)}
+            except TerraSatchApiError:
+                auth_ok = False
 
     snapshot = scan_hardware(include_network=False)
     return {
@@ -84,8 +84,6 @@ def _status_payload() -> dict[str, Any]:
         "device_count": len(snapshot.devices),
         "devices": [device.model_dump(mode="json") for device in snapshot.devices],
         "api_detail": api_detail,
-        "identity_detail": identity_detail,
-        "remote_config": load_remote_config(),
         "snapshot_file": str(get_paths().snapshot_file),
     }
 
@@ -139,14 +137,6 @@ def build_app() -> Any:
     ) -> dict[str, Any]:
         current = load_config()
         changes = update.model_dump(exclude_unset=True)
-
-        if "api_url" in changes:
-            if changes["api_url"] is None:
-                raise HTTPException(status_code=422, detail="API URL cannot be empty")
-            selected_api = str(changes["api_url"]).strip().rstrip("/")
-            if not selected_api.startswith(("https://", "http://")):
-                raise HTTPException(status_code=422, detail="API URL must start with http:// or https://")
-            changes["api_url"] = selected_api
 
         if "node_name" in changes:
             value = changes["node_name"]
@@ -257,7 +247,7 @@ def build_app() -> Any:
             return {"status": claim.status, "paired": False}
 
         device = claim.device
-        site_changed = bool(current.site_id and current.site_id != device.site_id)
+        site_changed = current.site_id != device.site_id
         updated = current.model_copy(
             update={
                 "device_id": device.id,
@@ -332,6 +322,7 @@ table{{width:100%;border-collapse:collapse}} th,td{{padding:10px;border-bottom:1
 code,pre{{white-space:pre-wrap;word-break:break-word}} pre{{background:#0d100e;border:1px solid #252d29;border-radius:12px;padding:14px}}
 label{{display:block;font-size:.86rem;color:#c5cec8;margin-bottom:6px}}
 input{{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #35403a;background:#0d100e;color:#f4f7f5}}
+input[readonly]{{color:#a7b0aa;cursor:not-allowed}}
 .form-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}}
 .actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}}
 button{{padding:11px 15px;border-radius:11px;border:1px solid #4b5a52;background:#f4f7f5;color:#111;font-weight:700;cursor:pointer}}
@@ -382,7 +373,7 @@ button:disabled{{opacity:.5;cursor:not-allowed}}
 <h2>Local Device Settings</h2>
 <form id="configForm">
 <div class="form-grid">
-<div><label for="api_url">TerraSatch API</label><input id="api_url" name="api_url" value="{html.escape(str(config['api_url']))}"></div>
+<div><label for="api_url">TerraSatch API (terminal/admin controlled)</label><input id="api_url" value="{html.escape(str(config['api_url']))}" readonly></div>
 <div><label for="node_name">Node name</label><input id="node_name" name="node_name" value="{html.escape(str(config['node_name'] or ''))}" placeholder="field-kit-01"></div>
 <div><label for="scan_interval_seconds">Heartbeat / scan interval (seconds)</label><input id="scan_interval_seconds" name="scan_interval_seconds" type="number" min="5" max="3600" value="{int(config['scan_interval_seconds'])}"></div>
 <div><label for="source">Source label</label><input id="source" name="source" value="{html.escape(str(config['source']))}"></div>
@@ -393,6 +384,7 @@ button:disabled{{opacity:.5;cursor:not-allowed}}
 </div>
 <div class="actions"><button type="submit">Save Settings</button></div>
 </form>
+<p class="muted small">API target changes remain an advanced terminal/admin action so an existing device credential cannot be accidentally redirected to another host.</p>
 </div>
 
 <div class="card"><h2>Detected Hardware <span class="muted small">({status['device_count']})</span></h2><div style="overflow:auto"><table><thead><tr><th>Type</th><th>Device</th><th>Capabilities</th><th>Status</th></tr></thead><tbody>{device_rows}</tbody></table></div></div>
@@ -475,8 +467,27 @@ async function startPairing() {{
   const panel = document.getElementById("pairing");
   try {{
     const data = await request("/api/pairing/start", {{method:"POST",headers}});
+    panel.replaceChildren();
     panel.style.display = "block";
-    panel.innerHTML = `<strong>Pairing code: ${{data.user_code}}</strong><br><span class="muted small">Approve the organization and site in TerraSatch Admin.</span><div class="actions"><a href="${{data.verification_url}}" target="_blank" rel="noreferrer"><button type="button">Open TerraSatch Admin</button></a></div>`;
+
+    const code = document.createElement("strong");
+    code.textContent = `Pairing code: ${{data.user_code}}`;
+    const detail = document.createElement("div");
+    detail.className = "muted small";
+    detail.textContent = "Approve the organization and site in TerraSatch Admin.";
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const link = document.createElement("a");
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.href = data.verification_url;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Open TerraSatch Admin";
+    link.appendChild(button);
+    actions.appendChild(link);
+    panel.append(code, detail, actions);
+
     if (pairingTimer) clearInterval(pairingTimer);
     const interval = Math.max(2000, (data.interval_seconds || 5) * 1000);
     pairingTimer = setInterval(()=>claimPairing(data.device_code), interval);
@@ -505,7 +516,6 @@ document.getElementById("configForm").addEventListener("submit", async (event)=>
   event.preventDefault();
   const form = new FormData(event.target);
   const payload = {{
-    api_url: form.get("api_url"),
     node_name: form.get("node_name"),
     scan_interval_seconds: Number(form.get("scan_interval_seconds")),
     source: form.get("source"),
