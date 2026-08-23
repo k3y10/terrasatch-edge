@@ -14,7 +14,7 @@ The supported operator workflow is:
 6. confirm hardware and local runtime settings
 7. leave the Edge service running for field operation
 
-Organization, site, and future channel/workflow policy remain control-plane concerns. The local UI intentionally does not let an operator bypass tenant assignment or invent a parallel configuration model.
+Organization, site, API target, and future channel/workflow policy remain control-plane or advanced terminal concerns. The local UI intentionally does not let an operator bypass tenant assignment, redirect an existing device credential to another host, or invent a parallel configuration model.
 
 ## Operator Console (recommended)
 
@@ -54,7 +54,7 @@ A non-loopback bind is rejected unless the operator explicitly supplies `--allow
 
 ## Terminal mode
 
-The terminal remains a first-class interface for scripting, service work, and advanced troubleshooting:
+The terminal remains a first-class interface for scripting, service work, advanced API-target configuration, and troubleshooting:
 
 ```bash
 terrasatch-edge setup
@@ -67,15 +67,14 @@ terrasatch-edge run
 terrasatch-edge paths
 ```
 
-`terrasatch-edge setup` keeps the existing browser/device-code pairing flow and is the preferred non-UI fallback.
+`terrasatch-edge setup` keeps the existing browser/device-code pairing flow and is the preferred non-UI fallback. Advanced development/test environments can continue to use the existing `--api-url` option rather than exposing API redirection in the field-operator browser.
 
 ## Configuration ownership
 
-### Local Edge settings
+### Local Edge settings exposed in the Operator Console
 
 The operator may configure local runtime details such as:
 
-- API URL
 - node name
 - heartbeat / scan interval
 - source label
@@ -83,10 +82,11 @@ The operator may configure local runtime details such as:
 
 These values are stored through the existing `EdgeConfig` path used by the CLI and service.
 
-### TerraSatch control-plane settings
+### Advanced terminal / control-plane settings
 
-The following should stay API/Admin controlled:
+The following should not be freely editable from the field-operator browser:
 
+- API target
 - organization assignment
 - site assignment
 - device credential scope
@@ -94,7 +94,7 @@ The following should stay API/Admin controlled:
 - organization workflow/channel policy
 - future provider/channel activation rules
 
-This prevents a field computer from silently drifting away from the API's tenant and policy model.
+This prevents a field computer from silently drifting away from the API's tenant and policy model or sending an existing credential to an unintended API host.
 
 The running Edge agent already reloads local pairing/config changes without reinstalling and retrieves remote configuration from the API after a successful heartbeat.
 
