@@ -37,6 +37,7 @@ def test_windows_installer_launches_operator_console_by_default() -> None:
     assert "TerraSatch Edge Operator Console" in installer
     assert "-Command console" in installer
     assert "TerraSatch Edge Terminal Setup" in installer
+    assert "runasoriginaluser" in installer
     assert '[ValidateSet("console", "status", "doctor", "scan")]' in launcher
     assert '[string]$Command = "console"' in launcher
 
