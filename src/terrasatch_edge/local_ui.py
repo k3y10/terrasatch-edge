@@ -107,7 +107,7 @@ def _safe_config_payload(config: EdgeConfig) -> dict[str, Any]:
 
 def build_app() -> Any:
     try:
-        from fastapi import FastAPI, Header, HTTPException
+        from fastapi import Depends, FastAPI, Header, HTTPException
         from fastapi.responses import HTMLResponse
     except ImportError as exc:
         raise RuntimeError(
@@ -122,6 +122,8 @@ def build_app() -> Any:
         if x_terrasatch_edge_ui != "1":
             raise HTTPException(status_code=403, detail="Local operator confirmation header required")
 
+    operator_guard = Depends(require_operator_header)
+
     @app.get("/api/status")
     def api_status() -> dict[str, Any]:
         return _status_payload()
@@ -133,26 +135,39 @@ def build_app() -> Any:
     @app.put("/api/config")
     def update_config(
         update: ConfigUpdate,
-        _: None = require_operator_header,
+        _: None = operator_guard,
     ) -> dict[str, Any]:
         current = load_config()
-        changes = update.model_dump(exclude_none=True)
+        changes = update.model_dump(exclude_unset=True)
+
         if "api_url" in changes:
+            if changes["api_url"] is None:
+                raise HTTPException(status_code=422, detail="API URL cannot be empty")
             selected_api = str(changes["api_url"]).strip().rstrip("/")
             if not selected_api.startswith(("https://", "http://")):
                 raise HTTPException(status_code=422, detail="API URL must start with http:// or https://")
             changes["api_url"] = selected_api
-        if "node_name" in changes:
-            changes["node_name"] = str(changes["node_name"]).strip() or None
-        if "source" in changes:
-            changes["source"] = str(changes["source"]).strip() or "terrasatch-edge"
 
-        updated = current.model_copy(update=changes)
+        if "node_name" in changes:
+            value = changes["node_name"]
+            changes["node_name"] = str(value).strip() if value is not None and str(value).strip() else None
+
+        if "source" in changes:
+            value = changes["source"]
+            changes["source"] = str(value).strip() if value is not None and str(value).strip() else "terrasatch-edge"
+
+        merged = current.model_dump()
+        merged.update(changes)
+        try:
+            updated = EdgeConfig.model_validate(merged)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         save_config(updated)
         return {"ok": True, "config": _safe_config_payload(updated)}
 
     @app.post("/api/scan")
-    def rescan(_: None = require_operator_header) -> dict[str, Any]:
+    def rescan(_: None = operator_guard) -> dict[str, Any]:
         snapshot = scan_hardware(include_network=False)
         path = save_snapshot(snapshot)
         return {
@@ -163,11 +178,12 @@ def build_app() -> Any:
         }
 
     @app.post("/api/verify")
-    def verify(_: None = require_operator_header) -> dict[str, Any]:
+    def verify(_: None = operator_guard) -> dict[str, Any]:
         config = load_config()
         key = load_api_key()
         client = TerraSatchApiClient(config.api_url, key)
         result: dict[str, Any] = {"api_online": False, "authenticated": False, "heartbeat": False}
+
         try:
             result["health"] = client.health()
             result["api_online"] = True
@@ -201,7 +217,7 @@ def build_app() -> Any:
         return result
 
     @app.post("/api/doctor")
-    def doctor(_: None = require_operator_header) -> dict[str, Any]:
+    def doctor(_: None = operator_guard) -> dict[str, Any]:
         checks = [asdict(check) for check in run_doctor()]
         return {
             "ok": all(bool(check["ok"]) for check in checks),
@@ -209,7 +225,7 @@ def build_app() -> Any:
         }
 
     @app.post("/api/pairing/start")
-    def start_pairing(_: None = require_operator_header) -> dict[str, Any]:
+    def start_pairing(_: None = operator_guard) -> dict[str, Any]:
         config = load_config()
         snapshot = scan_hardware(include_network=False)
         node_name = config.node_name or f"{socket.gethostname()}-edge"
@@ -228,7 +244,7 @@ def build_app() -> Any:
     @app.post("/api/pairing/claim")
     def claim_pairing(
         request: PairingClaimRequest,
-        _: None = require_operator_header,
+        _: None = operator_guard,
     ) -> dict[str, Any]:
         current = load_config()
         client = TerraSatchApiClient(current.api_url)
@@ -273,7 +289,7 @@ def build_app() -> Any:
         }
 
     @app.post("/api/logout")
-    def logout(_: None = require_operator_header) -> dict[str, Any]:
+    def logout(_: None = operator_guard) -> dict[str, Any]:
         clear_api_key()
         return {"ok": True}
 
@@ -291,7 +307,6 @@ def build_app() -> Any:
         badge = "ONLINE" if status["api_online"] else "OFFLINE"
         auth = "AUTHENTICATED" if status["authenticated"] else "NOT AUTHENTICATED"
         config = _safe_config_payload(load_config())
-        config_json = html.escape(json.dumps(config))
         health_payload = html.escape(json.dumps(status["api_detail"], indent=2))
 
         return f"""
@@ -316,7 +331,7 @@ h1{{margin:0 0 4px;font-size:clamp(1.8rem,4vw,2.7rem)}} h2{{margin-top:0}} h3{{m
 table{{width:100%;border-collapse:collapse}} th,td{{padding:10px;border-bottom:1px solid #2a332e;text-align:left;vertical-align:top}}
 code,pre{{white-space:pre-wrap;word-break:break-word}} pre{{background:#0d100e;border:1px solid #252d29;border-radius:12px;padding:14px}}
 label{{display:block;font-size:.86rem;color:#c5cec8;margin-bottom:6px}}
-input,select{{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #35403a;background:#0d100e;color:#f4f7f5}}
+input{{width:100%;padding:11px 12px;border-radius:10px;border:1px solid #35403a;background:#0d100e;color:#f4f7f5}}
 .form-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}}
 .actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}}
 button{{padding:11px 15px;border-radius:11px;border:1px solid #4b5a52;background:#f4f7f5;color:#111;font-weight:700;cursor:pointer}}
@@ -408,7 +423,6 @@ terrasatch-edge paths</pre>
 <div class="card"><button class="danger" onclick="logoutEdge()">Remove Local Credential</button></div>
 
 <script>
-const initialConfig = JSON.parse("{config_json.replace('\\', '\\\\').replace(chr(34), '\\"')}");
 const headers = {{"Content-Type":"application/json","X-TerraSatch-Edge-UI":"1"}};
 let pairingTimer = null;
 
