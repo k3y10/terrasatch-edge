@@ -51,7 +51,7 @@ Name: "{commondesktop}\TerraSatch Edge"; Filename: "{sys}\WindowsPowerShell\v1.0
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeServiceSetup.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing or updating TerraSatch Edge service..."
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command console"; Description: "Open TerraSatch Edge Operator Console"; Flags: postinstall nowait skipifsilent
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command console"; Description: "Open TerraSatch Edge Operator Console"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopTerraSatchEdge"
