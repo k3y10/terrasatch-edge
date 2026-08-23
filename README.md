@@ -30,7 +30,7 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
 - browser/device-code pairing against the TerraSatch Edge control plane
 - organization/site assignment in TerraSatch Admin
 - device-scoped credential provisioning
-- safe local Edge configuration without exposing tenant reassignment controls
+- safe local Edge configuration without exposing tenant reassignment or API-redirection controls
 - hardware discovery and classification
 - Nooelec / RTL-SDR recognition
 - RTL receive readiness reporting aligned with the current API (`rtl_test` + `rtl_fm`)
@@ -90,6 +90,8 @@ Manual service keys remain available only as an advanced fallback:
 terrasatch-edge setup --api-key "$TERRASATCH_EDGE_API_KEY" --site-id "<uuid>"
 ```
 
+Advanced development/test environments can continue to select another API with the existing terminal `--api-url` flow. The field-operator browser intentionally does not expose API-target editing, which prevents an existing device credential from being accidentally redirected to another host.
+
 ## Useful commands
 
 ```text
@@ -147,9 +149,9 @@ PyInstaller builds must be run on the operating system and architecture being pa
 
 ## Configuration ownership
 
-Local Edge configuration covers device/runtime concerns such as API URL, node name, heartbeat interval, source label, and speech runtime settings.
+The Operator Console exposes local device/runtime concerns such as node name, heartbeat interval, source label, and speech runtime settings.
 
-Organization assignment, site assignment, credential scope, remote configuration, and future organization workflow/channel policy stay API/Admin controlled. This keeps Edge reusable across UAC, CAIC, ski patrol, wildfire, SAR, utilities, and other organizations instead of embedding one partner's assumptions into the field runtime.
+API target selection, organization assignment, site assignment, credential scope, remote configuration, and future organization workflow/channel policy stay terminal/Admin/control-plane concerns. This keeps Edge reusable across UAC, CAIC, ski patrol, wildfire, SAR, utilities, and other organizations instead of embedding one partner's assumptions into the field runtime.
 
 ## Receiver status
 
@@ -162,6 +164,7 @@ The standalone Edge runtime still needs the next operational adapter phase to co
 - device pairing avoids distributing reusable organization service keys
 - paired credentials are tenant scoped by the API
 - organization/site assignment is not locally editable in the Operator Console
+- API target is read-only in the field-operator browser
 - mutating UI requests require an Edge-specific operator header
 - arbitrary shell execution is not exposed in the browser
 - the Operator Console binds to loopback by default and rejects remote binds without explicit opt-in
