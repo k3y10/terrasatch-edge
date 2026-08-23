@@ -1,6 +1,6 @@
 param(
-    [ValidateSet("status", "doctor", "scan")]
-    [string]$Command = "status"
+    [ValidateSet("console", "status", "doctor", "scan")]
+    [string]$Command = "console"
 )
 
 $ErrorActionPreference = "Continue"
@@ -15,6 +15,10 @@ if (-not (Test-Path $EdgeExe)) {
 } else {
     & $EdgeExe $Command
     $ExitCode = $LASTEXITCODE
+}
+
+if ($Command -eq "console") {
+    exit $ExitCode
 }
 
 Write-Host ""
