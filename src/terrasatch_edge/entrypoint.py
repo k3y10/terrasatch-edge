@@ -4,9 +4,11 @@ import sys
 
 from . import __version__
 from .cli import app
+from .operator_cli import register_operator_commands
 from .speech_cli import register_speech_commands
 
 register_speech_commands(app)
+register_operator_commands(app)
 
 
 def _configure_redirected_stdio() -> None:
