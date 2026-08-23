@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import ipaddress
+import socket
 import threading
 import webbrowser
 from typing import Annotated, Any
 
+import httpx
 import typer
 from rich.console import Console
 
@@ -22,6 +24,36 @@ def _is_loopback_host(host: str) -> bool:
         return False
 
 
+def _console_url(host: str, port: int) -> str:
+    browser_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host.strip()
+    if ":" in browser_host and not browser_host.startswith("["):
+        browser_host = f"[{browser_host}]"
+    return f"http://{browser_host}:{port}"
+
+
+def _existing_console(url: str) -> bool:
+    try:
+        response = httpx.get(f"{url}/api/status", timeout=0.6)
+    except httpx.HTTPError:
+        return False
+    if response.status_code != 200:
+        return False
+    try:
+        payload = response.json()
+    except ValueError:
+        return False
+    return isinstance(payload, dict) and "version" in payload and "api_url" in payload
+
+
+def _port_in_use(host: str, port: int) -> bool:
+    connect_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    try:
+        with socket.create_connection((connect_host, port), timeout=0.4):
+            return True
+    except OSError:
+        return False
+
+
 def _launch_operator_console(
     host: str,
     port: int,
@@ -36,6 +68,20 @@ def _launch_operator_console(
         )
         raise typer.Exit(2)
 
+    url = _console_url(host, port)
+    if _existing_console(url):
+        console.print(f"TerraSatch Edge Operator Console is already running: [link={url}]{url}[/link]")
+        if open_browser:
+            webbrowser.open(url)
+        return
+
+    if _port_in_use(host, port):
+        console.print(
+            f"[red]Port {port} is already in use by another local application.[/red] "
+            "Choose another port with --port."
+        )
+        raise typer.Exit(2)
+
     try:
         import uvicorn
     except ImportError as exc:
@@ -47,8 +93,6 @@ def _launch_operator_console(
 
     from .local_ui import build_app
 
-    browser_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-    url = f"http://{browser_host}:{port}"
     console.print(f"TerraSatch Edge Operator Console: [link={url}]{url}[/link]")
     console.print("Press Ctrl+C to stop the local console. The field agent/service can continue separately.")
 
