@@ -33,7 +33,8 @@ def _console_url(host: str, port: int) -> str:
 
 def _existing_console(url: str) -> bool:
     try:
-        response = httpx.get(f"{url}/api/status", timeout=0.6)
+        with httpx.Client(timeout=0.6, trust_env=False) as client:
+            response = client.get(f"{url}/openapi.json")
     except httpx.HTTPError:
         return False
     if response.status_code != 200:
@@ -42,7 +43,10 @@ def _existing_console(url: str) -> bool:
         payload = response.json()
     except ValueError:
         return False
-    return isinstance(payload, dict) and "version" in payload and "api_url" in payload
+    if not isinstance(payload, dict):
+        return False
+    info = payload.get("info")
+    return isinstance(info, dict) and info.get("title") == "TerraSatch Edge Operator Console"
 
 
 def _port_in_use(host: str, port: int) -> bool:
