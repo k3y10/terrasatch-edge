@@ -149,7 +149,7 @@ def test_windows_console_renders_simple_guided_setup(tmp_path, monkeypatch):
     assert "Check this PC" in response.text
     assert "Pair with TerraSatch" in response.text
     assert "Verify and finish" in response.text
-    assert ">Listen<" not in response.text
+    assert '<div class="brand-lockup"' in response.text
 
 
 def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
@@ -186,7 +186,10 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "Snowbird Operations" in response.text
     assert "Run a quick check" in response.text
     assert 'src="/assets/terrasatch-logo.webp"' in response.text
-    assert 'src="/assets/terrasatch-black-logo.png"' in response.text
+    assert "brand-lockup-values" in response.text
+    assert "Field Intelligence" in response.text
+    assert "Listen</span><b>|</b><span>Watch" in response.text
+    assert 'src="/assets/terrasatch-black-logo.png"' not in response.text
     assert "Follow these three steps" not in response.text
 
 
