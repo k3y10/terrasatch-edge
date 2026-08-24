@@ -34,12 +34,13 @@ def test_windows_installer_launches_operator_console_by_default() -> None:
         encoding="utf-8"
     )
 
-    assert "TerraSatch Edge Operator Console" in installer
+    assert "TerraSatch Edge Setup and Console" in installer
     assert "-Command console" in installer
-    assert "TerraSatch Edge Terminal Setup" in installer
+    assert "TerraSatch Edge Advanced Terminal Setup" in installer
     assert "runasoriginaluser" in installer
     assert '[ValidateSet("console", "status", "doctor", "scan")]' in launcher
     assert '[string]$Command = "console"' in launcher
+    assert 'TERRASATCH_EDGE_WINDOWS_CONSOLE = "1"' in launcher
 
 
 def test_windows_service_forces_utf8_for_redirected_logs() -> None:
