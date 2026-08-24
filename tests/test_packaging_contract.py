@@ -26,6 +26,22 @@ def test_windows_setup_uses_production_api_environment_contract() -> None:
     assert "$EdgeExe --version" in script
 
 
+def test_windows_installer_launches_operator_console_by_default() -> None:
+    installer = (ROOT / "packaging" / "windows" / "TerraSatchEdge.iss").read_text(
+        encoding="utf-8"
+    )
+    launcher = (ROOT / "packaging" / "windows" / "TerraSatchEdgeConsole.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "TerraSatch Edge Operator Console" in installer
+    assert "-Command console" in installer
+    assert "TerraSatch Edge Terminal Setup" in installer
+    assert "runasoriginaluser" in installer
+    assert '[ValidateSet("console", "status", "doctor", "scan")]' in launcher
+    assert '[string]$Command = "console"' in launcher
+
+
 def test_windows_service_forces_utf8_for_redirected_logs() -> None:
     service_xml = (
         ROOT / "packaging" / "windows" / "TerraSatchEdgeService.xml"

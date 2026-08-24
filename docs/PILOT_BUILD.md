@@ -1,8 +1,8 @@
-# TerraSatch Edge v0.2 Pilot Build
+# TerraSatch Edge v0.2.2 Pilot Build
 
-## What v0.2 changes
+## What v0.2.2 changes
 
-TerraSatch Edge now uses the production Edge control plane:
+TerraSatch Edge uses the production Edge control plane and now adds a UI-first local operator experience without changing the API contract:
 
 1. Edge scans the local machine.
 2. `POST /api/v1/edge/pairings` creates a short pairing code.
@@ -13,7 +13,7 @@ TerraSatch Edge now uses the production Edge control plane:
 7. Edge reads `GET /api/v1/edge/config` after each heartbeat.
 8. Test radio-style observations still use `POST /api/v1/transmissions`.
 
-The manual service-key setup path remains only as an advanced fallback.
+The guided Operator Console and terminal mode both use the same `EdgeConfig`, credential files, hardware scanner, and API client. The manual service-key setup path remains only as an advanced fallback.
 
 ## Windows pilot artifact
 
@@ -42,11 +42,35 @@ The installer:
 
 - installs the bundled Edge runtime under Program Files
 - installs TerraSatch Edge as an automatic Windows service
-- creates Setup, Status, Diagnostics, and Hardware Scan shortcuts
-- launches a first-run PowerShell setup wrapper after installation
-- keeps first-run setup visible until the operator closes it
-- writes setup transcripts to `C:\ProgramData\TerraSatch\Edge\state\logs`
+- creates an **Operator Console** shortcut and makes the desktop TerraSatch Edge shortcut UI-first
+- keeps Status, Diagnostics, Hardware Scan, and Terminal Setup as separate advanced shortcuts
+- offers to open the Operator Console after installation
 - uses ProgramData for shared configuration/state
+- preserves the terminal setup transcript path for operators who use the advanced setup wrapper
+
+### Windows first-run operator flow
+
+After installation:
+
+1. open **TerraSatch Edge** from the desktop or Start Menu
+2. the local Operator Console opens in the browser at `http://127.0.0.1:8742`
+3. connect the intended SDR/radio/audio/GPS hardware
+4. choose **Rescan Hardware**
+5. choose **Pair This Edge**
+6. approve the correct organization + site in TerraSatch Admin
+7. choose **Verify Connection**
+8. run **Diagnostics**
+9. close the Operator Console when finished
+
+The Windows service is separate from the browser console and continues running after the console closes.
+
+Terminal users may still run:
+
+```powershell
+& "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" setup
+& "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" status
+& "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" doctor
+```
 
 ## RTL-SDR / Nooelec runtime
 
@@ -115,6 +139,7 @@ After installing and pairing:
 & "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" status
 & "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" doctor
 & "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" scan
+& "C:\Program Files\TerraSatch\Edge\Edge\TerraSatchEdge.exe" run --once
 Get-Service TerraSatchEdge
 ```
 
@@ -122,9 +147,10 @@ Expected lifecycle result:
 
 - API online
 - Edge credential accepted
-- device + site persisted
+- device + organization + site persisted
+- hardware heartbeat accepted
 - Windows service running
-- Nooelec/RTL-SDR hardware recognized
+- Nooelec/RTL-SDR hardware recognized when connected
 - RTL-SDR runtime located when bundled
 - SDR receive probe succeeds when the WinUSB driver and runtime can claim the device
 
@@ -138,13 +164,14 @@ Build on macOS:
 ./scripts/build-macos.sh
 ```
 
-Result:
+Result pattern:
 
 ```text
-release/TerraSatch-Edge-0.2.0.pkg
+release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
+release/TerraSatch-Edge-0.2.2-macOS-x64.pkg
 ```
 
-The pilot `.pkg` is intentionally unsigned. Public distribution should use an Apple Developer ID Installer certificate and notarization.
+The public download remains disabled until the architecture-specific package is clean-machine validated and the production artifact is Developer ID signed/notarized.
 
 ## Debian/Ubuntu Linux
 
@@ -157,8 +184,8 @@ Build on the target architecture:
 Result examples:
 
 ```text
-release/terrasatch-edge_0.2.0_amd64.deb
-release/terrasatch-edge_0.2.0_arm64.deb
+release/terrasatch-edge_0.2.2_amd64.deb
+release/terrasatch-edge_0.2.2_arm64.deb
 ```
 
 The package installs a `systemd` service.
@@ -167,25 +194,16 @@ The package installs a `systemd` service.
 
 Do not link TerraSatch.com to a source checkout or Python installer.
 
-Publish native release artifacts and their SHA-256 hashes, then expose:
+Publish native release artifacts and their SHA-256 hashes, then expose the validated platform artifacts. For controlled pilots, publish reviewed native artifacts to a TerraSatch-controlled release location and point TerraSatch.com to those assets. Code-sign/notarize as appropriate before broad public distribution.
 
-```text
-Windows x64  → TerraSatch-Edge-Setup-x64.exe
-macOS        → TerraSatch-Edge-0.2.0.pkg
-Linux AMD64  → terrasatch-edge_0.2.0_amd64.deb
-Linux ARM64  → terrasatch-edge_0.2.0_arm64.deb
-```
-
-For controlled pilots, publish the reviewed native artifacts to a public TerraSatch-controlled release location and point TerraSatch.com to those assets. Code-sign each artifact before broad public distribution.
-
-## Not yet in v0.2
+## Not yet in v0.2.2
 
 - continuous RTL-SDR IQ capture
-- channel/frequency profiles
+- API-driven channel/frequency provider adapter
 - NFM/FM radio-audio pipeline into TerraListen/Satchy
 - BCA radio audio capture/transcription
 - offline SQLite replay queue
 - automatic binary updater
-- production code signing/notarization
+- completed production code signing/notarization across all platforms
 
-The finite IQ readiness probe is intentionally narrower than the continuous radio adapter. It proves that Edge can open and read the receiver before the streaming/demodulation layer is added.
+The finite IQ readiness probe is intentionally narrower than the continuous radio adapter. It proves that Edge can open and read the receiver before the streaming/demodulation layer is added. The Operator Console does not claim those adapters exist before they are implemented.
