@@ -21,6 +21,7 @@ Build on a Windows x64 machine:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
+$env:TERRASATCH_CODESIGN_CERT_THUMBPRINT = "<CA-issued code-signing certificate thumbprint>"
 .\scripts\build-windows.ps1
 ```
 
@@ -28,7 +29,12 @@ Build-machine requirements:
 
 - Python 3.12
 - Inno Setup 6 or 7
+- Windows SDK Signing Tools (`signtool.exe`)
+- a valid code-signing certificate with its private key in the current-user or local-machine Personal store
 - Internet access for Python dependencies and the pinned WinSW 2.12.0 service wrapper
+
+Production builds fail before packaging when the trusted signing identity is missing. For a
+local UI/install test only, use `-AllowUnsigned`; never publish that QA artifact.
 
 Result:
 

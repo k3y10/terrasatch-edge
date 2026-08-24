@@ -185,7 +185,25 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "This Edge is ready" in response.text
     assert "Snowbird Operations" in response.text
     assert "Run a quick check" in response.text
+    assert 'src="/assets/terrasatch-logo.webp"' in response.text
+    assert 'src="/assets/terrasatch-black-logo.png"' in response.text
     assert "Follow these three steps" not in response.text
+
+
+def test_console_serves_bundled_brand_artwork(tmp_path, monkeypatch):
+    _configure_paths(tmp_path, monkeypatch)
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+
+    client = TestClient(local_ui.build_app())
+    mark = client.get("/assets/terrasatch-logo.webp")
+    lockup = client.get("/assets/terrasatch-black-logo.png")
+
+    assert mark.status_code == 200
+    assert mark.headers["content-type"] == "image/webp"
+    assert len(mark.content) > 100_000
+    assert lockup.status_code == 200
+    assert lockup.headers["content-type"] == "image/png"
+    assert len(lockup.content) > 100_000
 
 
 def test_pairing_claim_saves_device_credential_and_assignment(tmp_path, monkeypatch):

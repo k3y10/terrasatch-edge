@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import socket
 from dataclasses import asdict
+from functools import lru_cache
+from importlib.resources import files
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +22,12 @@ from .config import (
 from .discovery import save_snapshot, scan_hardware
 from .doctor import run_doctor
 from .operator_page import render_operator_page
+
+
+@lru_cache(maxsize=2)
+def _brand_asset(name: str) -> bytes:
+    """Load bundled brand artwork once for the offline operator console."""
+    return files("terrasatch_edge").joinpath("assets", name).read_bytes()
 
 
 class ConfigUpdate(BaseModel):
@@ -107,13 +115,29 @@ def _safe_config_payload(config: EdgeConfig) -> dict[str, Any]:
 def build_app() -> Any:
     try:
         from fastapi import Depends, FastAPI, Header, HTTPException
-        from fastapi.responses import HTMLResponse
+        from fastapi.responses import HTMLResponse, Response
     except ImportError as exc:
         raise RuntimeError(
             "Local UI dependencies are not installed. Run: pip install 'terrasatch-edge[ui]'"
         ) from exc
 
     app = FastAPI(title="TerraSatch Edge Operator Console", docs_url=None, redoc_url=None)
+
+    @app.get("/assets/terrasatch-logo.webp", include_in_schema=False)
+    def brand_mark() -> Response:
+        return Response(
+            content=_brand_asset("terrasatch-logo.webp"),
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+
+    @app.get("/assets/terrasatch-black-logo.png", include_in_schema=False)
+    def brand_lockup() -> Response:
+        return Response(
+            content=_brand_asset("terrasatch-black-logo.png"),
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
 
     def require_operator_header(
         x_terrasatch_edge_ui: str | None = Header(default=None),

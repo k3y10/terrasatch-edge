@@ -2,13 +2,13 @@
 
 Windows release builds use **Satchy**, TerraSatch's Sasquatch AI agent, as the application and installer icon.
 
-By default `scripts/build-windows.ps1` downloads the approved transparent Satchy artwork from:
+By default `scripts/build-windows.ps1` uses the reviewed Satchy artwork bundled with Edge:
 
 ```text
-https://www.terrasatch.com/terralisten-sasquatch.png
+src/terrasatch_edge/assets/terrasatch-logo.webp
 ```
 
-The build uses Pillow to crop the transparent artwork, place it on a square transparent canvas with safe padding, and generate:
+The build regenerates the ICO on every release build. It uses Pillow to crop the transparent artwork, place it on a square transparent canvas with safe padding, and generate:
 
 ```text
 packaging/windows/assets/TerraSatchEdge.ico

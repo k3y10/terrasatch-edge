@@ -26,6 +26,12 @@ SetupIconFile={#MyIconFile}
 UninstallDisplayIcon={app}\TerraSatchEdge.ico
 CloseApplications=yes
 RestartApplications=no
+#ifdef SignedRelease
+SignTool=TerraSatch
+SignedUninstaller=yes
+SignToolRetryCount=3
+SignToolRetryDelay=2500
+#endif
 
 [Dirs]
 Name: "{commonappdata}\TerraSatch\Edge"; Permissions: admins-full system-full users-modify
