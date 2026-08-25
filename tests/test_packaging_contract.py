@@ -66,6 +66,7 @@ def test_windows_release_build_bundles_brand_assets_and_requires_trusted_signing
     assert "[switch]$AllowUnsigned" in build_script
     assert '"/fd", "SHA256"' in build_script
     assert '"/td", "SHA256"' in build_script
+    assert "Invoke-AuthenticodeSign -Path $WinSW" in build_script
     assert "Assert-AuthenticodeSignature -Path $Installer" in build_script
     assert "#ifdef SignedRelease" in installer
     assert "SignTool=TerraSatch" in installer

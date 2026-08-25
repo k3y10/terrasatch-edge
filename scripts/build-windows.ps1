@@ -301,6 +301,9 @@ New-Item -ItemType Directory -Force $Vendor | Out-Null
 if (-not (Test-Path $WinSW)) {
     Invoke-WebRequest -Uri $WinSWUrl -OutFile $WinSW
 }
+if ($SignTool) {
+    Invoke-AuthenticodeSign -Path $WinSW
+}
 
 Write-Host "[6/7] Locating Inno Setup compiler"
 $Candidates = @()
