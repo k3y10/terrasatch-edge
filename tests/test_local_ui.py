@@ -113,6 +113,102 @@ def test_status_payload_does_not_expose_remote_config_or_identity(tmp_path, monk
     assert "identity_detail" not in payload
 
 
+def test_windows_console_renders_simple_guided_setup(tmp_path, monkeypatch):
+    _configure_paths(tmp_path, monkeypatch)
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+    monkeypatch.setenv("TERRASATCH_EDGE_WINDOWS_CONSOLE", "1")
+    monkeypatch.setattr(
+        local_ui,
+        "_status_payload",
+        lambda: {
+            "version": "test",
+            "configured": False,
+            "api_url": "https://api.terrasatch.com",
+            "api_online": False,
+            "authenticated": False,
+            "device_id": None,
+            "organization_id": None,
+            "site_id": None,
+            "site_name": None,
+            "node_name": None,
+            "hostname": "field-pc",
+            "platform": "Windows",
+            "architecture": "AMD64",
+            "device_count": 0,
+            "devices": [],
+            "api_detail": {},
+            "snapshot_file": "snapshot.json",
+        },
+    )
+
+    response = TestClient(local_ui.build_app()).get("/")
+
+    assert response.status_code == 200
+    assert "Windows setup" in response.text
+    assert "Set up this Edge" in response.text
+    assert "Check this PC" in response.text
+    assert "Pair with TerraSatch" in response.text
+    assert "Verify and finish" in response.text
+    assert '<div class="brand-lockup"' in response.text
+
+
+def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
+    _configure_paths(tmp_path, monkeypatch)
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+    monkeypatch.setattr(
+        local_ui,
+        "_status_payload",
+        lambda: {
+            "version": "test",
+            "configured": True,
+            "api_url": "https://api.terrasatch.com",
+            "api_online": True,
+            "authenticated": True,
+            "device_id": "device-1",
+            "organization_id": "org-1",
+            "site_id": "site-1",
+            "site_name": "Snowbird Operations",
+            "node_name": "FIELD-KIT-07",
+            "hostname": "field-pc",
+            "platform": "Windows",
+            "architecture": "AMD64",
+            "device_count": 3,
+            "devices": [],
+            "api_detail": {"status": "ok"},
+            "snapshot_file": "snapshot.json",
+        },
+    )
+
+    response = TestClient(local_ui.build_app()).get("/")
+
+    assert response.status_code == 200
+    assert "This Edge is ready" in response.text
+    assert "Snowbird Operations" in response.text
+    assert "Run a quick check" in response.text
+    assert 'src="/assets/terrasatch-logo.webp"' in response.text
+    assert "brand-lockup-values" in response.text
+    assert "Field Intelligence" in response.text
+    assert "Listen</span><b>|</b><span>Watch" in response.text
+    assert 'src="/assets/terrasatch-black-logo.png"' not in response.text
+    assert "Follow these three steps" not in response.text
+
+
+def test_console_serves_bundled_brand_artwork(tmp_path, monkeypatch):
+    _configure_paths(tmp_path, monkeypatch)
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+
+    client = TestClient(local_ui.build_app())
+    mark = client.get("/assets/terrasatch-logo.webp")
+    lockup = client.get("/assets/terrasatch-black-logo.png")
+
+    assert mark.status_code == 200
+    assert mark.headers["content-type"] == "image/webp"
+    assert len(mark.content) > 100_000
+    assert lockup.status_code == 200
+    assert lockup.headers["content-type"] == "image/png"
+    assert len(lockup.content) > 100_000
+
+
 def test_pairing_claim_saves_device_credential_and_assignment(tmp_path, monkeypatch):
     _configure_paths(tmp_path, monkeypatch)
     save_config(

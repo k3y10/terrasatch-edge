@@ -34,12 +34,13 @@ def test_windows_installer_launches_operator_console_by_default() -> None:
         encoding="utf-8"
     )
 
-    assert "TerraSatch Edge Operator Console" in installer
+    assert "TerraSatch Edge Setup and Console" in installer
     assert "-Command console" in installer
-    assert "TerraSatch Edge Terminal Setup" in installer
+    assert "TerraSatch Edge Advanced Terminal Setup" in installer
     assert "runasoriginaluser" in installer
     assert '[ValidateSet("console", "status", "doctor", "scan")]' in launcher
     assert '[string]$Command = "console"' in launcher
+    assert 'TERRASATCH_EDGE_WINDOWS_CONSOLE = "1"' in launcher
 
 
 def test_windows_service_forces_utf8_for_redirected_logs() -> None:
@@ -49,6 +50,27 @@ def test_windows_service_forces_utf8_for_redirected_logs() -> None:
 
     assert '<env name="PYTHONUTF8" value="1"/>' in service_xml
     assert '<env name="PYTHONIOENCODING" value="utf-8"/>' in service_xml
+
+
+def test_windows_release_build_bundles_brand_assets_and_requires_trusted_signing() -> None:
+    build_script = (ROOT / "scripts" / "build-windows.ps1").read_text(encoding="utf-8")
+    installer = (ROOT / "packaging" / "windows" / "TerraSatchEdge.iss").read_text(
+        encoding="utf-8"
+    )
+    brand_dir = ROOT / "src" / "terrasatch_edge" / "assets"
+
+    assert (brand_dir / "terrasatch-logo.webp").stat().st_size > 100_000
+    assert (brand_dir / "terrasatch-black-logo.png").stat().st_size > 100_000
+    assert '"--collect-data", "terrasatch_edge"' in build_script
+    assert "TERRASATCH_CODESIGN_CERT_THUMBPRINT" in build_script
+    assert "[switch]$AllowUnsigned" in build_script
+    assert '"/fd", "SHA256"' in build_script
+    assert '"/td", "SHA256"' in build_script
+    assert "Invoke-AuthenticodeSign -Path $WinSW" in build_script
+    assert "Assert-AuthenticodeSignature -Path $Installer" in build_script
+    assert "#ifdef SignedRelease" in installer
+    assert "SignTool=TerraSatch" in installer
+    assert "SignedUninstaller=yes" in installer
 
 
 def test_edge_env_example_points_at_production_https() -> None:

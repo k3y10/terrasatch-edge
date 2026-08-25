@@ -2,7 +2,7 @@
 
 TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
 
-Current development package version: **0.2.2**. The currently published Windows pilot remains **0.2.1** until a validated v0.2.2 Windows rebuild replaces it.
+Current development package version: **0.2.2**. The Windows v0.2.2 artifact remains in pilot status until its trusted-signed replacement passes the native release gate.
 
 ## Shared API contract
 

@@ -55,8 +55,9 @@ For each exact artifact:
 4. Pair once and record the Device ID/site.
 5. Confirm the background service picks up registration and sends heartbeats.
 6. Restart/reboot and confirm registration persists.
-7. Record SHA-256 from the exact artifact that passed validation.
-8. Test real supported receive hardware when that platform is advertised as receiver-ready.
+7. Verify a valid, timestamped Authenticode signature from the expected TerraSatch publisher on every Windows executable, installer, and uninstaller.
+8. Record SHA-256 from the exact signed artifact that passed validation.
+9. Test real supported receive hardware when that platform is advertised as receiver-ready.
 
 TX remains provider/hardware gated and must never be inferred from hardware discovery alone.
 

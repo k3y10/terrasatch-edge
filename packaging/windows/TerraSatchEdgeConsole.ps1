@@ -13,6 +13,10 @@ if (-not (Test-Path $EdgeExe)) {
     Write-Host "TerraSatch Edge executable was not found at: $EdgeExe" -ForegroundColor Red
     $ExitCode = 2
 } else {
+    if ($Command -eq "console") {
+        # Marks the packaged browser experience as the Windows setup/console surface.
+        $env:TERRASATCH_EDGE_WINDOWS_CONSOLE = "1"
+    }
     & $EdgeExe $Command
     $ExitCode = $LASTEXITCODE
 }

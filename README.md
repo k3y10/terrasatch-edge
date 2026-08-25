@@ -5,7 +5,7 @@
 TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
 > Current development milestone: **v0.2.2 native compatibility + operator experience pilot**  
-> Current public Windows build: **v0.2.1**
+> Current public Windows build: **v0.2.2** (trusted-signed replacement pending)
 
 ## Pilot architecture
 
@@ -118,8 +118,15 @@ See [`docs/NATIVE_BUILDS.md`](docs/NATIVE_BUILDS.md) for the current macOS/Linux
 Windows:
 
 ```powershell
+$env:TERRASATCH_CODESIGN_CERT_THUMBPRINT = "<CA-issued code-signing certificate thumbprint>"
 .\scripts\build-windows.ps1
 ```
+
+The production build signs and verifies the native Edge executable, installer, and
+uninstaller with SHA-256 plus an RFC 3161 timestamp. The certificate must be installed
+with its private key in the current-user or local-machine Personal certificate store.
+Use `.\scripts\build-windows.ps1 -AllowUnsigned` only for local QA; that artifact must
+not be uploaded or published.
 
 produces:
 
@@ -127,7 +134,7 @@ produces:
 release\TerraSatch-Edge-Setup-x64.exe
 ```
 
-The v0.2.2 development installer is UI-first: the desktop/Start Menu TerraSatch Edge entry opens the Operator Console, while status, diagnostics, hardware scan, and terminal setup remain separate shortcuts. The validated v0.2.1 Windows pilot remains the current public build until the v0.2.2 artifact is built and clean-machine validated.
+The v0.2.2 installer is UI-first: the desktop/Start Menu TerraSatch Edge entry opens the Operator Console, while status, diagnostics, hardware scan, and terminal setup remain separate shortcuts. Public replacement artifacts must pass the trusted Authenticode gate above.
 
 macOS:
 

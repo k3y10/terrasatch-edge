@@ -26,7 +26,17 @@ terrasatch-edge console
 
 The packaged Windows installer exposes the same console through the TerraSatch Edge desktop and Start Menu shortcuts. The command opens the browser automatically and binds to `127.0.0.1:8742` by default.
 
-The Operator Console provides:
+The Operator Console provides a Windows-first guided path:
+
+1. check this PC and connected equipment
+2. pair it to the correct TerraSatch organization and site
+3. verify the credential and first heartbeat
+
+After setup, the normal screen becomes a simple readiness view. Device settings,
+hardware inventory, diagnostics, identifiers, and terminal reference remain available
+through secondary dialogs instead of competing with the main field status.
+
+The console also provides:
 
 - current API reachability
 - device credential/authentication state
@@ -125,11 +135,11 @@ terrasatch-edge run --once
 The v0.2.2 Windows installer now targets a UI-first onboarding model:
 
 - **TerraSatch Edge** desktop shortcut -> Operator Console
-- **TerraSatch Edge Operator Console** -> guided local UI
+- **TerraSatch Edge Setup and Console** -> guided Windows setup and readiness UI
 - **TerraSatch Edge Status** -> terminal status
 - **TerraSatch Edge Diagnostics** -> terminal diagnostics
 - **TerraSatch Edge Hardware Scan** -> terminal hardware scan
-- **TerraSatch Edge Terminal Setup** -> legacy/advanced CLI pairing flow
+- **TerraSatch Edge Advanced Terminal Setup** -> legacy/advanced CLI pairing flow
 
 The installer still installs/updates the persistent Windows service. The console is an operator/configuration surface, not the field agent process itself.
 
