@@ -45,6 +45,19 @@ class EdgeConfig(BaseModel):
     speech_vad_filter: bool = True
     speech_local_files_only: bool = False
 
+    # Receive-only BCA/FRS pilot settings. These do not enable SDR transmission.
+    radio_profile: str = "bca-frs-na"
+    radio_channel: int | None = Field(default=None, ge=1, le=22)
+    radio_output_sample_rate: int = Field(default=16_000, ge=8_000, le=48_000)
+    radio_demod_sample_rate: int = Field(default=24_000, ge=8_000, le=250_000)
+    radio_squelch: int = Field(default=20, ge=1, le=100)
+    radio_squelch_delay: int = Field(default=10, ge=1, le=10_000)
+    radio_gain_db: float | None = Field(default=None, ge=0, le=60)
+    radio_chunk_seconds: float = Field(default=0.20, gt=0, le=2)
+    radio_silence_seconds: float = Field(default=0.90, gt=0, le=10)
+    radio_min_transmission_seconds: float = Field(default=0.40, gt=0, le=10)
+    radio_max_transmission_seconds: float = Field(default=30.0, ge=1, le=300)
+
 
 @dataclass(frozen=True)
 class Paths:
@@ -109,6 +122,26 @@ def _env_bool(name: str) -> bool | None:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_int(name: str) -> int | None:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return int(raw.strip())
+    except ValueError:
+        return None
+
+
+def _env_float(name: str) -> float | None:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return float(raw.strip())
+    except ValueError:
+        return None
+
+
 def load_config() -> EdgeConfig:
     paths = get_paths()
     env_api = os.environ.get("TERRASATCH_EDGE_API_URL")
@@ -127,13 +160,17 @@ def load_config() -> EdgeConfig:
     if env_site:
         data["site_id"] = env_site
     if env_interval:
-        data["scan_interval_seconds"] = int(env_interval)
+        try:
+            data["scan_interval_seconds"] = int(env_interval)
+        except ValueError:
+            pass
 
     string_overrides = {
         "speech_model": "TERRASATCH_EDGE_SPEECH_MODEL",
         "speech_device": "TERRASATCH_EDGE_SPEECH_DEVICE",
         "speech_compute_type": "TERRASATCH_EDGE_SPEECH_COMPUTE_TYPE",
         "speech_language": "TERRASATCH_EDGE_SPEECH_LANGUAGE",
+        "radio_profile": "TERRASATCH_EDGE_RADIO_PROFILE",
     }
     for field_name, env_name in string_overrides.items():
         raw = os.environ.get(env_name)
@@ -148,10 +185,60 @@ def load_config() -> EdgeConfig:
         if value is not None:
             data[field_name] = value
 
+    int_overrides = {
+        "radio_channel": "TERRASATCH_EDGE_RADIO_CHANNEL",
+        "radio_output_sample_rate": "TERRASATCH_EDGE_RADIO_OUTPUT_SAMPLE_RATE",
+        "radio_demod_sample_rate": "TERRASATCH_EDGE_RADIO_DEMOD_SAMPLE_RATE",
+        "radio_squelch": "TERRASATCH_EDGE_RADIO_SQUELCH",
+        "radio_squelch_delay": "TERRASATCH_EDGE_RADIO_SQUELCH_DELAY",
+    }
+    for field_name, env_name in int_overrides.items():
+        value = _env_int(env_name)
+        if value is not None:
+            data[field_name] = value
+
+    float_overrides = {
+        "radio_gain_db": "TERRASATCH_EDGE_RADIO_GAIN_DB",
+        "radio_chunk_seconds": "TERRASATCH_EDGE_RADIO_CHUNK_SECONDS",
+        "radio_silence_seconds": "TERRASATCH_EDGE_RADIO_SILENCE_SECONDS",
+        "radio_min_transmission_seconds": "TERRASATCH_EDGE_RADIO_MIN_SECONDS",
+        "radio_max_transmission_seconds": "TERRASATCH_EDGE_RADIO_MAX_SECONDS",
+    }
+    for field_name, env_name in float_overrides.items():
+        value = _env_float(env_name)
+        if value is not None:
+            data[field_name] = value
+
     try:
         return EdgeConfig.model_validate(data)
     except (ValidationError, ValueError):
         return EdgeConfig()
+
+
+def update_registration_config(
+    current: EdgeConfig,
+    *,
+    api_url: str,
+    device_id: str | None,
+    organization_id: str | None,
+    site_id: str | None,
+    site_name: str | None,
+    node_name: str | None,
+) -> EdgeConfig:
+    """Update pairing identity without resetting speech/radio tuning."""
+
+    data = current.model_dump()
+    data.update(
+        {
+            "api_url": api_url,
+            "device_id": device_id,
+            "organization_id": organization_id,
+            "site_id": site_id,
+            "site_name": site_name,
+            "node_name": node_name,
+        }
+    )
+    return EdgeConfig.model_validate(data)
 
 
 def save_config(config: EdgeConfig) -> Path:

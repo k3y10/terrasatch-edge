@@ -6,6 +6,7 @@ from .api import TerraSatchApiClient, TerraSatchApiError
 from .config import load_api_key, load_config
 from .discovery import scan_hardware
 from .models import DeviceKind
+from .radio_profiles import BCA_FRS_NA_PROFILE, bca_frs_channel
 from .tooling import find_executable, probe_rtl_sdr
 
 
@@ -121,9 +122,43 @@ def run_doctor() -> list[DoctorCheck]:
                 )
             )
 
-    gps_detail = (
-        f"{len(gps)} GPS/GNSS device(s) recognized" if gps else "No recognized GPS detected"
-    )
+        rtl_fm = find_executable("rtl_fm")
+        checks.append(
+            DoctorCheck(
+                name="Radio FM demodulator",
+                ok=rtl_fm is not None,
+                detail=str(rtl_fm) if rtl_fm else "rtl_fm executable not found",
+                recommendation=(
+                    "Install rtl-sdr/rtl_fm or point TERRASATCH_EDGE_TOOLS at the trusted RTL-SDR tool bundle."
+                    if rtl_fm is None
+                    else None
+                ),
+            )
+        )
+
+    if config.radio_profile == BCA_FRS_NA_PROFILE:
+        if config.radio_channel is None:
+            radio_detail = "BCA/FRS North America profile ready; choose channel 1-22 at listen time"
+        else:
+            radio_detail = bca_frs_channel(config.radio_channel).display_name
+        checks.append(
+            DoctorCheck(
+                name="BCA radio profile",
+                ok=True,
+                detail=radio_detail,
+            )
+        )
+    else:
+        checks.append(
+            DoctorCheck(
+                name="BCA radio profile",
+                ok=False,
+                detail=f"Configured radio profile: {config.radio_profile}",
+                recommendation=f"Set TERRASATCH_EDGE_RADIO_PROFILE={BCA_FRS_NA_PROFILE} for this pilot.",
+            )
+        )
+
+    gps_detail = f"{len(gps)} GPS/GNSS device(s) recognized" if gps else "No recognized GPS detected"
     checks.append(
         DoctorCheck(
             name="GPS hardware",
