@@ -4,8 +4,9 @@
 
 TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
-> Current development milestone: **v0.2.2 native compatibility + operator experience pilot**  
-> Current public Windows build: **v0.2.2** (trusted-signed replacement pending)
+> Current source milestone: **v0.2.3 receive-only BCA/FRS pilot + native operator experience**  
+> Current public Windows installer: **v0.2.2** while the v0.2.3 Windows artifact completes the signed native release gate.  
+> Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge) · exact v0.2.3 source snapshot: [`87961ce`](https://github.com/k3y10/terrasatch-edge/commit/87961cea7d2cdd8ad57b8d48b0732f0c694b0c97)
 
 ## Pilot architecture
 
@@ -23,7 +24,7 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
                   TerraListen / Satchy
 ```
 
-## v0.2.2 development capabilities
+## v0.2.3 development capabilities
 
 - Windows, macOS and Linux shared runtime
 - guided local Operator Console plus terminal/CLI mode
@@ -35,6 +36,11 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
 - Nooelec / RTL-SDR recognition
 - RTL receive readiness reporting aligned with the current API (`rtl_test` + `rtl_fm`)
 - finite receive-only IQ diagnostic probe when `rtl_sdr` is available
+- receive-only BCA / North American FRS channel profile for channels 1-22
+- `radio-channels` channel/frequency reference command
+- bounded `listen-radio` capture using `rtl_fm`, local speech transcription, and the canonical TerraSatch transmission-ingest path
+- radio source provenance such as `terrasatch-edge-radio-bca-ch05`
+- successful temporary radio captures removed by default, with explicit `--keep-audio` support for QA
 - HackRF discovery without falsely advertising RX/TX before a provider adapter exists
 - GPS/GNSS, serial, USB audio and network inventory
 - periodic Edge heartbeat and hardware inventory sync
@@ -43,6 +49,8 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
 - local diagnostics and status UI
 - production-style test transmission ingestion through the CLI
 - native packaging for Windows, macOS and Debian/Ubuntu
+
+The v0.2.3 BCA/FRS path is **receive-only**. It does not transmit through the SDR. BCA privacy/sub-channel codes do not change the carrier frequency, and the current pilot listens channel-wide rather than filtering CTCSS/DCS codes.
 
 ## Recommended operator setup
 
@@ -101,6 +109,8 @@ terrasatch-edge scan
 terrasatch-edge devices
 terrasatch-edge status
 terrasatch-edge doctor
+terrasatch-edge radio-channels
+terrasatch-edge listen-radio --channel 5 --once --callsign "BCA TEST"
 terrasatch-edge run --once
 terrasatch-edge run
 terrasatch-edge ui
@@ -110,6 +120,18 @@ terrasatch-edge logout
 ```
 
 `console` is the recommended guided experience. The older `ui` command remains available for compatibility; terminal commands remain the automation and advanced-administration interface.
+
+For the receive-only BCA/FRS pilot, a field validation command is:
+
+```bash
+terrasatch-edge listen-radio \
+  --channel 5 \
+  --once \
+  --callsign "BCA TEST" \
+  --hotwords "TerraSatch, Cardiff Bowl, BCA"
+```
+
+Use `--keep-audio` only when a successful capture needs to be retained for QA. Failed captures are retained automatically for diagnosis.
 
 ## Native pilot builds
 
@@ -122,19 +144,15 @@ $env:TERRASATCH_CODESIGN_CERT_THUMBPRINT = "<CA-issued code-signing certificate 
 .\scripts\build-windows.ps1
 ```
 
-The production build signs and verifies the native Edge executable, installer, and
-uninstaller with SHA-256 plus an RFC 3161 timestamp. The certificate must be installed
-with its private key in the current-user or local-machine Personal certificate store.
-Use `.\scripts\build-windows.ps1 -AllowUnsigned` only for local QA; that artifact must
-not be uploaded or published.
+The production build signs and verifies the native Edge executable, service wrapper, installer, and uninstaller with SHA-256 plus an RFC 3161 timestamp. The certificate must be installed with its private key in the current-user or local-machine Personal certificate store. Use `.\scripts\build-windows.ps1 -AllowUnsigned` only for local QA; that artifact must not be uploaded or published.
 
-produces:
+The build produces:
 
 ```text
 release\TerraSatch-Edge-Setup-x64.exe
 ```
 
-The v0.2.2 installer is UI-first: the desktop/Start Menu TerraSatch Edge entry opens the Operator Console, while status, diagnostics, hardware scan, and terminal setup remain separate shortcuts. Public replacement artifacts must pass the trusted Authenticode gate above.
+The installer is UI-first: the desktop/Start Menu TerraSatch Edge entry opens the Operator Console, while status, diagnostics, hardware scan, and terminal setup remain separate shortcuts. The v0.2.3 source includes the receive-only BCA/FRS radio path, but the public Windows download must stay on the previously validated artifact until the exact v0.2.3 signed installer passes the release checklist.
 
 macOS:
 
@@ -142,7 +160,7 @@ macOS:
 ./scripts/build-macos.sh
 ```
 
-The native package installs `com.terrasatch.edge` as a LaunchDaemon. New native packages derive v0.2.2 from the source package. The public download remains disabled until Apple Silicon/Intel artifacts are built and validated. Broad distribution requires Developer ID signing and notarization.
+The native package installs `com.terrasatch.edge` as a LaunchDaemon. New native packages derive their version from the source package. Broad distribution requires Developer ID signing and notarization.
 
 Linux:
 
@@ -150,9 +168,17 @@ Linux:
 ./scripts/build-linux-deb.sh
 ```
 
-The Debian/Ubuntu package installs a persistent systemd service and uses the same system registration for CLI + service. New native packages derive v0.2.2 from the source package. The public download remains disabled until amd64/arm64 artifacts are built and validated.
+The Debian/Ubuntu package installs a persistent systemd service and uses the same system registration for CLI + service. New native packages derive their version from the source package.
 
 PyInstaller builds must be run on the operating system and architecture being packaged. The target user's machine does not need a Python installation.
+
+## Public source and release verification
+
+TerraSatch Edge source is publicly reviewable in this repository. Reviewers can inspect the runtime, native packaging scripts, Windows installer definition, radio receive adapter, tests, and release controls before installing a binary.
+
+For a public Windows release, TerraSatch uses immutable versioned Blob objects and publishes the SHA-256 of the exact validated installer. A new version is published at a new path rather than replacing older bytes in place.
+
+See [`docs/PUBLIC_RELEASE_CHECKLIST.md`](docs/PUBLIC_RELEASE_CHECKLIST.md) for the public release gate, including API readiness, clean-machine install validation, Authenticode verification, checksum recording, Blob publication, and post-upload verification.
 
 ## Configuration ownership
 
@@ -164,10 +190,13 @@ API target selection, organization assignment, site assignment, credential scope
 
 Hardware inventory and provider readiness are separate on purpose. A Nooelec/RTL-SDR can be identified before its receive tooling is ready, but the control plane receives `radio:receive` / `audio:capture` only when the required RTL receive utilities are present. HackRF is discovery-only until a TerraListen provider adapter actually implements its receive/transmit path.
 
-The standalone Edge runtime still needs the next operational adapter phase to continuously tune configured channels, segment live radio audio, and feed those captures into TerraListen/Satchy. The API-side radio policy, remote Edge configuration, and bounded RTL capture work should remain the contract for that phase.
+The v0.2.3 receive pilot can tune a selected BCA/FRS channel, capture a bounded carrier-gated call with `rtl_fm`, transcribe it locally, and submit it through the existing TerraSatch transmission ingest path. Continuous unattended channel operation, privacy-code filtering, and additional radio-provider adapters remain later operational phases.
 
 ## Security
 
+- source code is publicly reviewable before installation
+- exact public release artifacts are identified by published SHA-256 checksums
+- versioned release objects are immutable by policy; new bytes require a new version/path
 - device pairing avoids distributing reusable organization service keys
 - paired credentials are tenant scoped by the API
 - organization/site assignment is not locally editable in the Operator Console
@@ -177,7 +206,7 @@ The standalone Edge runtime still needs the next operational adapter phase to co
 - the Operator Console binds to loopback by default and rejects remote binds without explicit opt-in
 - Windows pilot files are ACL-hardened under ProgramData
 - POSIX system packages keep config/state root-owned and require `sudo` for setup/status/doctor
-- production public installers should be code-signed/notarized before broad distribution
+- production public Windows installers must pass trusted Authenticode signing and timestamp verification before publication
 
 ## No hosted CI required
 
