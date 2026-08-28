@@ -8,6 +8,7 @@ from typing import Callable
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .config import EdgeConfig, load_api_key, load_config, save_remote_config
 from .discovery import save_snapshot, scan_hardware
+from .radio_service import read_radio_status
 
 
 @dataclass
@@ -46,7 +47,7 @@ class EdgeAgent:
                 return False, f"API unavailable; snapshot saved locally: {exc}"
 
         try:
-            heartbeat = self.client.heartbeat(snapshot)
+            heartbeat = self.client.heartbeat(snapshot, telemetry={"radio": read_radio_status()})
             remote_config = self.client.remote_config()
             save_remote_config(remote_config)
             device = heartbeat.get("device") if isinstance(heartbeat, dict) else None

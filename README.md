@@ -39,6 +39,7 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
 - receive-only BCA / North American FRS channel profile for channels 1-22
 - `radio-channels` channel/frequency reference command
 - bounded `listen-radio` capture using `rtl_fm`, local speech transcription, and the canonical TerraSatch transmission-ingest path
+- persistent `radio start/status/stop` monitoring with local filtering, bounded QA retention, and a durable offline outbox
 - radio source provenance such as `terrasatch-edge-radio-bca-ch05`
 - successful temporary radio captures removed by default, with explicit `--keep-audio` support for QA
 - HackRF discovery without falsely advertising RX/TX before a provider adapter exists
@@ -111,6 +112,8 @@ terrasatch-edge status
 terrasatch-edge doctor
 terrasatch-edge radio-channels
 terrasatch-edge listen-radio --channel 5 --once --callsign "BCA TEST"
+terrasatch-edge radio start --channel 5
+terrasatch-edge radio status
 terrasatch-edge run --once
 terrasatch-edge run
 terrasatch-edge ui
@@ -118,6 +121,9 @@ terrasatch-edge ingest-text "Wind loading near the ridgeline" --callsign "Field 
 terrasatch-edge paths
 terrasatch-edge logout
 ```
+
+See [Continuous radio monitoring](docs/RADIO_MONITORING.md) for filtering, QA retention,
+offline delivery, remote configuration, and Raspberry Pi/systemd operation.
 
 `console` is the recommended guided experience. The older `ui` command remains available for compatibility; terminal commands remain the automation and advanced-administration interface.
 
@@ -131,7 +137,8 @@ terrasatch-edge listen-radio \
   --hotwords "TerraSatch, Cardiff Bowl, BCA"
 ```
 
-Use `--keep-audio` only when a successful capture needs to be retained for QA. Failed captures are retained automatically for diagnosis.
+Use `--keep-audio` only for the legacy single-call QA workflow. Continuous mode deletes all
+temporary audio unless bounded QA retention is explicitly enabled.
 
 ## Native pilot builds
 

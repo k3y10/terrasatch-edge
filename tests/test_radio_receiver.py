@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import wave
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,8 @@ from terrasatch_edge.radio_receiver import (
 def test_rtl_fm_command_tunes_exact_bca_channel_and_is_receive_only() -> None:
     settings = RadioReceiveSettings(channel=5, rtl_squelch=22, rtl_squelch_delay=10, gain_db=28.0)
     command = build_rtl_fm_command(settings, executable="/usr/bin/rtl_fm")
-    assert command[:3] == ["/usr/bin/rtl_fm", "-M", "fm"]
+    assert command[:3] == ["/usr/bin/rtl_fm", "-d", "0"]
+    assert command[command.index("-M") + 1] == "fm"
     assert command[command.index("-f") + 1] == "462662500"
     assert command[command.index("-r") + 1] == "16000"
     assert command[command.index("-l") + 1] == "22"
@@ -48,9 +50,12 @@ def test_finalize_capture_writes_mono_16bit_wav(tmp_path: Path) -> None:
         settings=settings,
         peak_rms=500,
         source_message_id="radio-1",
+        started_at=datetime(2026, 8, 28, tzinfo=UTC),
     )
     assert result.duration_seconds == pytest.approx(1.0)
     assert result.channel == 5
+    assert result.duration_ms == 1000
+    assert result.ended_at > result.started_at
     with wave.open(str(path), "rb") as wav:
         assert wav.getnchannels() == 1
         assert wav.getsampwidth() == 2
