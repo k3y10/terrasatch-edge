@@ -61,7 +61,10 @@ class EdgeConfig(BaseModel):
     radio_silence_seconds: float = Field(default=0.90, gt=0, le=10)
     radio_min_transmission_seconds: float = Field(default=0.40, gt=0, le=10)
     radio_max_transmission_seconds: float = Field(default=30.0, ge=1, le=300)
+    radio_auto_calibrate: bool = True
+    radio_calibration_seconds: float = Field(default=0.40, gt=0, le=10)
     radio_min_peak_rms: int = Field(default=180, ge=0, le=32_767)
+    radio_release_rms_threshold: int = Field(default=120, ge=0, le=32_767)
     radio_vad_enabled: bool = True
     radio_vad_rms_threshold: int = Field(default=180, ge=0, le=32_767)
     radio_candidate_queue_max: int = Field(default=32, ge=1, le=1000)
@@ -197,6 +200,7 @@ def load_config() -> EdgeConfig:
         ("radio_vad_enabled", "TERRASATCH_EDGE_RADIO_VAD_ENABLED"),
         ("radio_keep_audio", "TERRASATCH_EDGE_RADIO_KEEP_AUDIO"),
         ("radio_qa_enabled", "TERRASATCH_EDGE_RADIO_QA_ENABLED"),
+        ("radio_auto_calibrate", "TERRASATCH_EDGE_RADIO_AUTO_CALIBRATE"),
     ):
         bool_value = _env_bool(env_name)
         if bool_value is not None:
@@ -209,6 +213,7 @@ def load_config() -> EdgeConfig:
         "radio_squelch": "TERRASATCH_EDGE_RADIO_SQUELCH",
         "radio_squelch_delay": "TERRASATCH_EDGE_RADIO_SQUELCH_DELAY",
         "radio_min_peak_rms": "TERRASATCH_EDGE_RADIO_MIN_PEAK_RMS",
+        "radio_release_rms_threshold": "TERRASATCH_EDGE_RADIO_RELEASE_RMS_THRESHOLD",
         "radio_vad_rms_threshold": "TERRASATCH_EDGE_RADIO_VAD_RMS_THRESHOLD",
         "radio_candidate_queue_max": "TERRASATCH_EDGE_RADIO_QUEUE_MAX",
         "radio_outbox_max_items": "TERRASATCH_EDGE_RADIO_OUTBOX_MAX_ITEMS",
@@ -226,6 +231,7 @@ def load_config() -> EdgeConfig:
         "radio_silence_seconds": "TERRASATCH_EDGE_RADIO_SILENCE_SECONDS",
         "radio_min_transmission_seconds": "TERRASATCH_EDGE_RADIO_MIN_SECONDS",
         "radio_max_transmission_seconds": "TERRASATCH_EDGE_RADIO_MAX_SECONDS",
+        "radio_calibration_seconds": "TERRASATCH_EDGE_RADIO_CALIBRATION_SECONDS",
         "radio_qa_max_age_hours": "TERRASATCH_EDGE_RADIO_QA_MAX_AGE_HOURS",
     }
     for field_name, env_name in float_overrides.items():

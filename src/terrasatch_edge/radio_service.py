@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .config import EdgeConfig, get_paths, load_remote_config
 from .radio_audio import QaAudioRetention, QaRetentionSettings, has_voice_activity
+from .radio_calibration import RadioCalibrationResult
 from .radio_outbox import RadioOutbox, RadioOutboxFull
 from .radio_profiles import BCA_FRS_NA_PROFILE, bca_frs_channel
 from .radio_receiver import (
@@ -46,7 +47,10 @@ class RadioProcessingConfig(BaseModel):
     min_transmission_seconds: float = Field(default=0.5, gt=0, le=10)
     max_transmission_seconds: float = Field(default=30, ge=1, le=300)
     end_gap_seconds: float = Field(default=0.9, gt=0, le=10)
+    auto_calibrate: bool = True
+    calibration_seconds: float = Field(default=0.4, gt=0, le=10)
     min_peak_rms: int = Field(default=180, ge=0, le=32_767)
+    release_rms_threshold: int = Field(default=120, ge=0, le=32_767)
     vad_enabled: bool = True
     vad_rms_threshold: int = Field(default=180, ge=0, le=32_767)
     discard_no_speech: bool = True
@@ -58,6 +62,8 @@ class RadioProcessingConfig(BaseModel):
     def validate_window(self) -> RadioProcessingConfig:
         if self.max_transmission_seconds < self.min_transmission_seconds:
             raise ValueError("maximum radio duration must not be shorter than minimum duration")
+        if self.release_rms_threshold >= self.min_peak_rms and self.min_peak_rms > 0:
+            self.release_rms_threshold = self.min_peak_rms - 1
         return self
 
 
@@ -107,7 +113,10 @@ def resolve_radio_config(
             "min_transmission_seconds": edge_config.radio_min_transmission_seconds,
             "max_transmission_seconds": edge_config.radio_max_transmission_seconds,
             "end_gap_seconds": edge_config.radio_silence_seconds,
+            "auto_calibrate": edge_config.radio_auto_calibrate,
+            "calibration_seconds": edge_config.radio_calibration_seconds,
             "min_peak_rms": edge_config.radio_min_peak_rms,
+            "release_rms_threshold": edge_config.radio_release_rms_threshold,
             "vad_enabled": edge_config.radio_vad_enabled,
             "vad_rms_threshold": edge_config.radio_vad_rms_threshold,
             "discard_no_speech": True,
@@ -216,6 +225,7 @@ class RadioMonitorService:
         client: TerraSatchApiClient,
         callsign: str | None = None,
         hotwords: str | None = None,
+        calibration: RadioCalibrationResult | None = None,
         receiver_factory: ReceiverFactory = _default_receiver_factory,
         state_dir: str | Path | None = None,
     ) -> None:
@@ -225,6 +235,7 @@ class RadioMonitorService:
         self.client = client
         self.callsign = callsign
         self.hotwords = hotwords
+        self.calibration = calibration
         self.receiver_factory = receiver_factory
         self.state_dir = Path(state_dir or get_paths().state_dir)
         self.capture_dir = self.state_dir / "radio-processing"
@@ -280,14 +291,7 @@ class RadioMonitorService:
                 )
             self.counters.outbox_depth = self.outbox.depth()
             self.counters.qa_storage_bytes = self.qa.storage_bytes()
-            payload = {
-                **asdict(self.counters),
-                "receiver": self.receiver_config.name,
-                "profile": self.config.profile,
-                "channel": self.channel,
-                "frequency_hz": bca_frs_channel(self.channel).frequency_hz,
-                "audio_retention": "QA" if self.qa.settings.enabled else "OFF",
-            }
+            payload = self._status_payload()
             self.status_path.parent.mkdir(parents=True, exist_ok=True)
             self.status_path.write_text(
                 json.dumps(payload, indent=2, sort_keys=True) + "\n",
@@ -297,14 +301,25 @@ class RadioMonitorService:
     def status(self) -> dict[str, Any]:
         self._update()
         with self._lock:
-            return {
-                **asdict(self.counters),
-                "receiver": self.receiver_config.name,
-                "profile": self.config.profile,
-                "channel": self.channel,
-                "frequency_hz": bca_frs_channel(self.channel).frequency_hz,
-                "audio_retention": "QA" if self.qa.settings.enabled else "OFF",
-            }
+            return self._status_payload()
+
+    def _status_payload(self) -> dict[str, Any]:
+        calibration = self.calibration
+        return {
+            **asdict(self.counters),
+            "receiver": self.receiver_config.name,
+            "profile": self.config.profile,
+            "channel": self.channel,
+            "frequency_hz": bca_frs_channel(self.channel).frequency_hz,
+            "audio_retention": "QA" if self.qa.settings.enabled else "OFF",
+            "calibration_mode": calibration.mode if calibration else "manual",
+            "calibration_attempts": calibration.attempts if calibration else 0,
+            "noise_floor_rms": calibration.noise_floor_rms if calibration else None,
+            "activity_rms_threshold": self.config.processing.min_peak_rms,
+            "release_rms_threshold": self.config.processing.release_rms_threshold,
+            "gain_db": self.edge_config.radio_gain_db,
+            "squelch": self.edge_config.radio_squelch,
+        }
 
     def _on_rejection(self, rejection: RadioCandidateRejection) -> None:
         field = "short_rejected" if rejection.reason == "short" else "signal_rejected"
@@ -337,6 +352,8 @@ class RadioMonitorService:
             end_gap_seconds=self.config.processing.end_gap_seconds,
             min_transmission_seconds=self.config.processing.min_transmission_seconds,
             max_transmission_seconds=self.config.processing.max_transmission_seconds,
+            activity_rms_threshold=self.config.processing.min_peak_rms,
+            release_rms_threshold=self.config.processing.release_rms_threshold,
         )
         receiver = self.receiver_factory(
             settings,

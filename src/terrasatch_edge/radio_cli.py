@@ -14,8 +14,9 @@ from rich.console import Console
 from rich.table import Table
 
 from .api import TerraSatchApiClient, TerraSatchApiError
-from .config import get_paths, load_api_key, load_config
+from .config import EdgeConfig, get_paths, load_api_key, load_config
 from .ingest import ingest_audio_file
+from .radio_calibration import RadioCalibrationError, RadioCalibrationResult, auto_calibrate_radio
 from .radio_profiles import (
     BCA_FRS_NA_PROFILE,
     BCA_PRIVACY_CODE_COUNT,
@@ -24,6 +25,7 @@ from .radio_profiles import (
 )
 from .radio_receiver import RadioReceiveError, RadioReceiveSettings, capture_one_transmission
 from .radio_service import (
+    RadioMonitorConfig,
     RadioMonitorService,
     load_resolved_radio_config,
     read_radio_status,
@@ -32,6 +34,42 @@ from .radio_service import (
 from .speech import FasterWhisperSpeechProvider, SpeechProcessingError, SpeechProviderUnavailable
 
 console = Console()
+
+
+def _receive_settings(
+    edge_config: EdgeConfig,
+    monitor_config: RadioMonitorConfig,
+    *,
+    channel: int,
+    device_index: int = 0,
+) -> RadioReceiveSettings:
+    processing = monitor_config.processing
+    return RadioReceiveSettings(
+        channel=channel,
+        device_index=device_index,
+        output_sample_rate=edge_config.radio_output_sample_rate,
+        demod_sample_rate=edge_config.radio_demod_sample_rate,
+        rtl_squelch=edge_config.radio_squelch,
+        rtl_squelch_delay=edge_config.radio_squelch_delay,
+        gain_db=edge_config.radio_gain_db,
+        read_chunk_seconds=edge_config.radio_chunk_seconds,
+        end_gap_seconds=processing.end_gap_seconds,
+        min_transmission_seconds=processing.min_transmission_seconds,
+        max_transmission_seconds=processing.max_transmission_seconds,
+        activity_rms_threshold=processing.min_peak_rms,
+        release_rms_threshold=processing.release_rms_threshold,
+    )
+
+
+def _print_calibration(result: RadioCalibrationResult) -> None:
+    gain = "tuner auto" if result.settings.gain_db is None else f"{result.settings.gain_db:g} dB"
+    console.print(
+        "[green]✓ RF calibrated[/green] · "
+        f"gain {gain} · squelch {result.settings.rtl_squelch} · "
+        f"noise RMS {result.noise_floor_rms} · "
+        f"gate {result.activity_rms_threshold}/{result.release_rms_threshold} · "
+        f"{result.attempts} probe(s)"
+    )
 
 
 def _radio_source(base_source: str, channel: int) -> str:
@@ -80,6 +118,13 @@ def register_radio_commands(app: typer.Typer) -> None:
             float | None,
             typer.Option("--gain-db", min=0, max=60, help="Optional fixed RTL-SDR gain."),
         ] = None,
+        auto_calibrate: Annotated[
+            bool,
+            typer.Option(
+                "--auto-calibrate/--no-auto-calibrate",
+                help="Measure the local RF floor and choose gain, squelch, and PCM gates.",
+            ),
+        ] = True,
     ) -> None:
         """Continuously receive while transcription and API delivery run independently."""
 
@@ -121,6 +166,47 @@ def register_radio_commands(app: typer.Typer) -> None:
                 f"not '{monitor_config.profile}'.[/red]"
             )
             raise typer.Exit(2)
+        calibration: RadioCalibrationResult | None = None
+        if auto_calibrate and monitor_config.processing.auto_calibrate:
+            console.print(
+                f"[cyan]Calibrating RF environment[/cyan] for channel {receiver.channels[0]}..."
+            )
+            try:
+                calibration = auto_calibrate_radio(
+                    _receive_settings(
+                        edge_config,
+                        monitor_config,
+                        channel=receiver.channels[0],
+                        device_index=receiver.device_index,
+                    ),
+                    fixed_squelch=squelch,
+                    fixed_gain_db=gain_db,
+                    probe_seconds=monitor_config.processing.calibration_seconds,
+                )
+            except RadioCalibrationError as exc:
+                console.print(f"[red]Radio auto-calibration failed:[/red] {exc}")
+                raise typer.Exit(3) from exc
+            edge_config = edge_config.model_copy(
+                update={
+                    "radio_squelch": calibration.settings.rtl_squelch,
+                    "radio_gain_db": calibration.settings.gain_db,
+                }
+            )
+            processing = monitor_config.processing.model_copy(
+                update={
+                    "min_peak_rms": calibration.activity_rms_threshold,
+                    "release_rms_threshold": calibration.release_rms_threshold,
+                }
+            )
+            monitor_config = monitor_config.model_copy(update={"processing": processing})
+            _print_calibration(calibration)
+        else:
+            console.print(
+                "[yellow]RF auto-calibration disabled[/yellow] · "
+                f"squelch {edge_config.radio_squelch} · "
+                f"gate {monitor_config.processing.min_peak_rms}/"
+                f"{monitor_config.processing.release_rms_threshold}"
+            )
         provider = FasterWhisperSpeechProvider(
             model_name=edge_config.speech_model,
             device=edge_config.speech_device,
@@ -135,6 +221,7 @@ def register_radio_commands(app: typer.Typer) -> None:
             client=TerraSatchApiClient(edge_config.api_url, key),
             callsign=callsign,
             hotwords=hotwords,
+            calibration=calibration,
         )
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         profile = bca_frs_channel(service.channel)
@@ -182,6 +269,17 @@ def register_radio_commands(app: typer.Typer) -> None:
         console.print(f"API: {status.get('api_status', 'UNKNOWN')}")
         console.print(f"Outbox: {status.get('outbox_depth', 0)}")
         console.print(f"Audio retention: {status.get('audio_retention', 'OFF')}")
+        if status.get("noise_floor_rms") is not None:
+            gain = status.get("gain_db")
+            gain_label = "auto" if gain is None else f"{gain:g} dB"
+            console.print(
+                "RF calibration: "
+                f"{status.get('calibration_mode', 'manual')} · "
+                f"noise RMS {status['noise_floor_rms']} · "
+                f"gate {status.get('activity_rms_threshold')}/"
+                f"{status.get('release_rms_threshold')} · "
+                f"gain {gain_label} · squelch {status.get('squelch')}"
+            )
         if status.get("last_error"):
             console.print(f"[yellow]Last issue: {status['last_error']}[/yellow]")
 
@@ -256,6 +354,13 @@ def register_radio_commands(app: typer.Typer) -> None:
             float | None,
             typer.Option("--gain-db", min=0, max=60, help="Optional fixed RTL-SDR gain in dB."),
         ] = None,
+        auto_calibrate: Annotated[
+            bool,
+            typer.Option(
+                "--auto-calibrate/--no-auto-calibrate",
+                help="Measure the local RF floor before listening.",
+            ),
+        ] = True,
     ) -> None:
         """Receive BCA radio traffic through Nooelec/RTL-SDR and ingest it into TerraSatch."""
 
@@ -300,7 +405,30 @@ def register_radio_commands(app: typer.Typer) -> None:
             end_gap_seconds=config.radio_silence_seconds,
             min_transmission_seconds=config.radio_min_transmission_seconds,
             max_transmission_seconds=config.radio_max_transmission_seconds,
+            activity_rms_threshold=config.radio_min_peak_rms,
+            release_rms_threshold=config.radio_release_rms_threshold,
         )
+
+        if auto_calibrate and config.radio_auto_calibrate:
+            console.print(f"[cyan]Calibrating RF environment[/cyan] for {profile.display_name}...")
+            try:
+                calibration = auto_calibrate_radio(
+                    settings,
+                    fixed_squelch=squelch,
+                    fixed_gain_db=gain_db,
+                    probe_seconds=config.radio_calibration_seconds,
+                )
+            except RadioCalibrationError as exc:
+                console.print(f"[red]Radio auto-calibration failed:[/red] {exc}")
+                raise typer.Exit(3) from exc
+            settings = calibration.settings
+            _print_calibration(calibration)
+        else:
+            console.print(
+                "[yellow]RF auto-calibration disabled[/yellow] · "
+                f"squelch {settings.rtl_squelch} · "
+                f"gate {settings.activity_rms_threshold}/{settings.release_rms_threshold}"
+            )
 
         console.print(
             f"[green]Listening[/green] {profile.display_name} with Nooelec/RTL-SDR receive only."

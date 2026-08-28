@@ -125,6 +125,11 @@ terrasatch-edge logout
 See [Continuous radio monitoring](docs/RADIO_MONITORING.md) for filtering, QA retention,
 offline delivery, remote configuration, and Raspberry Pi/systemd operation.
 
+Continuous and legacy radio commands auto-calibrate RTL gain, squelch, and local PCM activity
+gates at startup. Keep the selected channel clear during the brief calibration. The resulting
+noise floor and thresholds are visible in `terrasatch-edge radio status`; use
+`--no-auto-calibrate` only for deliberate manual tuning.
+
 `console` is the recommended guided experience. The older `ui` command remains available for compatibility; terminal commands remain the automation and advanced-administration interface.
 
 For the receive-only BCA/FRS pilot, a field validation command is:

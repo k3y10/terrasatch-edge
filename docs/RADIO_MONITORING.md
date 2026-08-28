@@ -32,11 +32,23 @@ their absence never invalidates otherwise authorized speech.
 
 ## Filtering and temporary audio
 
-`rtl_fm` squelch performs the first carrier gate. Edge then enforces minimum/maximum duration and
-a conservative PCM peak threshold before writing a temporary WAV. An inexpensive energy voice
-check runs before Faster Whisper, whose own VAD remains the higher-quality second check. Carrier
-pops, weak candidates, silence, and Faster Whisper's normal “no speech” result are discarded
-without creating API transmissions or stopping the receiver.
+At startup, Edge samples the quiet channel and automatically selects an RTL gain/squelch pair plus
+local PCM activity/release thresholds. Keep the channel clear for the short calibration period.
+This local RMS gate is required because some Linux `rtl_fm` builds continuously emit quiet PCM
+even while squelch is closed; byte flow by itself does not indicate a transmission. Hysteresis and
+the configured end gap form real transmission boundaries instead of fixed 30-second noise files.
+
+Edge then enforces minimum/maximum duration before writing a temporary WAV. An inexpensive energy
+voice check runs before Faster Whisper, whose own VAD remains the higher-quality second check.
+Carrier pops, weak candidates, silence, and Faster Whisper's normal “no speech” result are
+discarded without creating API transmissions or stopping the receiver. `radio status` reports the
+measured noise floor and active calibration settings.
+
+Use `--no-auto-calibrate` only when validating known manual settings. `--squelch` or `--gain-db`
+pins that value while calibration resolves the other settings. Environment overrides include
+`TERRASATCH_EDGE_RADIO_AUTO_CALIBRATE`, `TERRASATCH_EDGE_RADIO_CALIBRATION_SECONDS`,
+`TERRASATCH_EDGE_RADIO_MIN_PEAK_RMS`, `TERRASATCH_EDGE_RADIO_RELEASE_RMS_THRESHOLD`, and
+`TERRASATCH_EDGE_RADIO_MAX_SECONDS`.
 
 Temporary WAV files live under the Edge state directory and are deleted after success, rejection,
 or processing failure. Set `radio.qa.enabled` only during field tuning. QA retention is always
@@ -64,9 +76,13 @@ radio:
       channels: [5]
       privacy_code: 10
   processing:
+    auto_calibrate: true
+    calibration_seconds: 0.4
     min_transmission_seconds: 0.5
     max_transmission_seconds: 30
     end_gap_seconds: 0.9
+    min_peak_rms: 180
+    release_rms_threshold: 120
     vad_enabled: true
     discard_no_speech: true
     keep_audio: false

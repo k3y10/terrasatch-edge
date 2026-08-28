@@ -7,7 +7,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from terrasatch_edge.config import EdgeConfig
-from terrasatch_edge.radio_receiver import RadioAudioCapture, RadioCandidateRejection
+from terrasatch_edge.radio_calibration import RadioCalibrationResult
+from terrasatch_edge.radio_receiver import (
+    RadioAudioCapture,
+    RadioCandidateRejection,
+    RadioReceiveSettings,
+)
 from terrasatch_edge.radio_service import RadioMonitorService, resolve_radio_config
 from terrasatch_edge.speech import SpeechProcessingError, SpeechTranscript
 
@@ -108,6 +113,15 @@ def test_malformed_remote_radio_config_falls_back_safely() -> None:
     )
     assert invalid_nested.config.processing.min_transmission_seconds == 0.4
     assert invalid_nested.warnings
+
+
+def test_remote_pcm_release_threshold_is_safely_normalized() -> None:
+    resolved = resolve_radio_config(
+        EdgeConfig(radio_channel=5),
+        {"radio": {"processing": {"min_peak_rms": 100, "release_rms_threshold": 200}}},
+    )
+    assert resolved.config.processing.min_peak_rms == 100
+    assert resolved.config.processing.release_rms_threshold == 99
 
 
 def test_receiver_keeps_accepting_candidates_while_transcription_is_busy(tmp_path: Path) -> None:
@@ -231,6 +245,51 @@ def test_rf_gate_rejection_counters_distinguish_short_and_weak_candidates(tmp_pa
     assert status["short_rejected"] == 1
     assert status["signal_rejected"] == 1
     assert status["rf_candidates"] == 0
+
+
+def test_status_exposes_applied_rf_calibration(tmp_path: Path) -> None:
+    edge = EdgeConfig(
+        site_id="site-1",
+        radio_channel=5,
+        radio_gain_db=19.7,
+        radio_squelch=60,
+    )
+    config = resolve_radio_config(edge).config
+    settings = RadioReceiveSettings(
+        channel=5,
+        gain_db=19.7,
+        rtl_squelch=60,
+        activity_rms_threshold=420,
+        release_rms_threshold=300,
+    )
+    calibration = RadioCalibrationResult(
+        settings=settings,
+        attempts=4,
+        mode="auto",
+        noise_floor_rms=240,
+    )
+    service = RadioMonitorService(
+        edge_config=edge,
+        monitor_config=config.model_copy(
+            update={
+                "processing": config.processing.model_copy(
+                    update={"min_peak_rms": 420, "release_rms_threshold": 300}
+                )
+            }
+        ),
+        provider=FakeProvider(),
+        client=FakeClient(),
+        calibration=calibration,
+        state_dir=tmp_path / "state",
+    )
+    status = service.status()
+    assert status["calibration_mode"] == "auto"
+    assert status["calibration_attempts"] == 4
+    assert status["noise_floor_rms"] == 240
+    assert status["activity_rms_threshold"] == 420
+    assert status["release_rms_threshold"] == 300
+    assert status["gain_db"] == 19.7
+    assert status["squelch"] == 60
 
 
 def test_restart_delivers_existing_outbox_item_with_same_source_id(tmp_path: Path) -> None:
