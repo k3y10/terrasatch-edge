@@ -1,8 +1,13 @@
 # TerraSatch Edge native builds
 
-TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
+TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. Current source package version: **0.2.3**.
 
-Current development package version: **0.2.2**. The Windows v0.2.2 artifact remains in pilot status until its trusted-signed replacement passes the native release gate.
+Native artifacts use the release channels defined in [`RELEASE_CHANNELS.md`](RELEASE_CHANNELS.md):
+
+- **Partner Beta** — controlled testing/evaluation; exact bytes are SHA-256 verified and may be unsigned or not fully notarized.
+- **Official Release** — broad distribution after native validation and the applicable platform publisher-signing/notarization gate.
+
+A checksum is an integrity check, not a publisher signature.
 
 ## Shared API contract
 
@@ -18,104 +23,63 @@ The service checks registration/config on each cycle, so a service that started 
 
 Hardware discovery is intentionally separate from provider readiness:
 
-- RTL-SDR / Nooelec is reported as `radio:receive` + `audio:capture` only when the RTL receive runtime is complete (`rtl_test` and `rtl_fm`).
-- HackRF discovery is reported as `hardware:hackrf`; it does **not** report RX/TX until a TerraListen provider adapter actually implements those operations.
-- TX remains off by default and provider-gated by the API.
+- RTL-SDR / Nooelec reports `radio:receive` + `audio:capture` only when the RTL receive runtime is complete (`rtl_test` and `rtl_fm`).
+- HackRF discovery reports hardware presence only until a TerraListen provider adapter actually implements supported RX/TX operations.
+- TX remains off by default and provider/policy gated by the API.
 
-## Linux — Debian / Ubuntu
+## Windows x64
 
-Build on the same target architecture you intend to publish.
+### Partner Beta
 
-```bash
-./scripts/build-linux-deb.sh
+```powershell
+.\scripts\build-windows-partner-beta.ps1
 ```
 
-Supported public pilot architectures:
-
-- `amd64`
-- `arm64`
-
-The build runs the Python test suite, creates a PyInstaller runtime, installs a systemd service, and emits an architecture-specific `.deb` plus SHA-256.
-
-Expected artifact names:
+Expected pattern:
 
 ```text
-release/terrasatch-edge_0.2.2_amd64.deb
-release/terrasatch-edge_0.2.2_arm64.deb
+release\TerraSatch-Edge-0.2.3-Windows-x64-partner-beta-unsigned.exe
+release\TerraSatch-Edge-0.2.3-Windows-x64-partner-beta-unsigned.exe.sha256
+release\TerraSatch-Edge-0.2.3-Windows-x64-partner-beta-unsigned.exe.release.json
 ```
 
-The package uses shared system paths so the CLI and background service see the same registration:
+The beta wrapper intentionally uses the existing unsigned QA builder, verifies Authenticode reports `NotSigned`, and promotes the artifact only into the clearly labeled controlled Partner Beta channel. Windows may display Unknown publisher or SmartScreen warnings.
 
-```text
-/etc/terrasatch-edge
-/var/lib/terrasatch-edge
+### Official Release
+
+```powershell
+$env:TERRASATCH_CODESIGN_CERT_THUMBPRINT = "<CA-issued code-signing certificate thumbprint>"
+.\scripts\build-windows.ps1
 ```
 
-After installation:
-
-```bash
-sudo terrasatch-edge setup
-sudo terrasatch-edge status
-sudo terrasatch-edge doctor
-systemctl status terrasatch-edge
-```
-
-The Debian package recommends `rtl-sdr`. Install it when using Nooelec/RTL-SDR hardware:
-
-```bash
-sudo apt update
-sudo apt install rtl-sdr
-```
-
-Do not enable the Linux website button until the exact `.deb` has passed install, pairing, heartbeat, reboot/service-start, hardware discovery, and (when applicable) RTL receive tests on that architecture.
+Official Windows distribution requires trusted Authenticode signing and an RFC 3161 timestamp for the native executable, service wrapper, installer, and uninstaller, plus clean-machine validation.
 
 ## macOS
 
-Build natively on the target Mac architecture:
-
-```bash
-./scripts/build-macos.sh
-```
-
-Supported public pilot architectures:
+Supported pilot architectures:
 
 - Apple Silicon (`arm64`)
 - Intel (`x64`, built on `x86_64`)
 
-Expected artifact names:
-
-```text
-release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
-release/TerraSatch-Edge-0.2.2-macOS-x64.pkg
-```
-
-The package installs a `LaunchDaemon` (`com.terrasatch.edge`) and uses shared system state under:
-
-```text
-/Library/Application Support/TerraSatch/Edge
-```
-
-After installation:
+### Partner Beta
 
 ```bash
-sudo terrasatch-edge setup
-sudo terrasatch-edge status
-sudo terrasatch-edge doctor
-sudo launchctl print system/com.terrasatch.edge
+./scripts/build-macos-partner-beta.sh
 ```
 
-For Nooelec/RTL-SDR testing, install the RTL-SDR utilities in a standard Homebrew location. The package runtime checks both Apple Silicon and Intel Homebrew paths:
+Expected unsigned pattern:
 
 ```text
-/opt/homebrew/bin
-/usr/local/bin
+release/TerraSatch-Edge-0.2.3-macOS-arm64-partner-beta-unsigned.pkg
+release/TerraSatch-Edge-0.2.3-macOS-arm64-partner-beta-unsigned.pkg.sha256
+release/TerraSatch-Edge-0.2.3-macOS-arm64-partner-beta-unsigned.pkg.release.json
 ```
 
-### Signing and notarization
+If a signing identity is present, the wrapper records `signed` in the filename/metadata but the package remains **Partner Beta** unless it separately passes the Official Release gate.
 
-Unsigned packages are acceptable only for controlled internal pilot testing. Broad public macOS distribution should use a Developer ID-signed executable/package and Apple notarization.
+### Official Release
 
-Optional build variables:
+Broad macOS distribution requires Developer ID signing and Apple notarization/stapling. The native builder supports:
 
 ```bash
 export TERRASATCH_MACOS_APPLICATION_IDENTITY="Developer ID Application: ..."
@@ -124,25 +88,79 @@ export TERRASATCH_MACOS_NOTARY_PROFILE="terrasatch-notary"
 ./scripts/build-macos.sh
 ```
 
-When a notary profile is supplied, the build submits with `notarytool`, waits for acceptance, staples the ticket, and validates the stapled package.
+## Linux — Debian / Ubuntu
 
-Do not enable either macOS website button until the exact package for that architecture has passed clean install, pairing, heartbeat, reboot/service-start, hardware discovery, Gatekeeper/signing validation for public distribution, and the relevant radio receive tests.
+Supported pilot architectures:
 
-## Release checklist
+- `amd64`
+- `arm64`
 
-For every new artifact:
+### Partner Beta
 
-1. Build from the intended Edge release commit.
-2. Confirm package-reported version.
-3. Record SHA-256.
-4. Install on a clean/native target.
-5. Pair using the human-readable code + Admin URL.
-6. Confirm the assigned Device ID/site and `Auth: OK`.
-7. Confirm heartbeat appears online in the current API/Admin health view.
-8. Reboot and confirm the native service comes back automatically.
-9. Run `doctor` and hardware scan.
-10. Test actual RTL receive when shipping RTL-SDR support.
-11. Upload the exact tested artifact to the TerraSatch public release store.
-12. Publish that exact URL + SHA-256 on `www.terrasatch.com/downloads`.
+```bash
+./scripts/build-linux-partner-beta.sh
+```
 
-Native builds are intentionally manual for the pilot; no GitHub Actions workflow is required.
+Expected pattern:
+
+```text
+release/terrasatch-edge_0.2.3_partner-beta_amd64.deb
+release/terrasatch-edge_0.2.3_partner-beta_amd64.deb.sha256
+release/terrasatch-edge_0.2.3_partner-beta_amd64.deb.release.json
+```
+
+The package installs a persistent systemd service and uses shared registration under:
+
+```text
+/etc/terrasatch-edge
+/var/lib/terrasatch-edge
+```
+
+For Nooelec/RTL-SDR testing:
+
+```bash
+sudo apt update
+sudo apt install rtl-sdr
+```
+
+The current Linux pilot pipeline publishes SHA-256 integrity metadata but does not claim that checksum as a package publisher signature.
+
+## Validation after installation
+
+Every distributed artifact should be installed and tested as the produced package, not from a source checkout.
+
+```text
+terrasatch-edge --version
+terrasatch-edge status
+terrasatch-edge doctor
+```
+
+Validate:
+
+1. package-reported version and architecture;
+2. API target and authentication;
+3. organization/site assignment;
+4. heartbeat visibility;
+5. service restart/reboot persistence;
+6. hardware discovery;
+7. actual RTL receive when that capability is advertised;
+8. artifact SHA-256 against the distributed `.sha256` file.
+
+## Partner Beta distribution gate
+
+Before sending a Partner Beta artifact to a tester or invited organization:
+
+1. Build from the intended source revision.
+2. Run the native build test suite.
+3. Install the exact artifact on a clean/native target.
+4. Pair and verify API/auth/heartbeat.
+5. Reboot and verify the native service.
+6. Test supported receive hardware where applicable.
+7. Confirm the artifact filename contains `partner-beta`.
+8. Confirm `.sha256` and `.release.json` are present and match the artifact.
+9. Tell the recipient that it is evaluation software and may show OS publisher/security warnings.
+10. Do not describe the build as an Official Release or as evidence of a formal partnership.
+
+## Official release gate
+
+For broad public/native distribution, follow [`PUBLIC_RELEASE_CHECKLIST.md`](PUBLIC_RELEASE_CHECKLIST.md). Windows and macOS must complete their trusted platform signing/notarization requirements before the artifact is labeled Official.

@@ -8,7 +8,7 @@ fi
 
 PKG="${1:-}"
 EXPECTED_ARCH="${2:-}"
-EXPECTED_VERSION="${3:-0.2.2}"
+EXPECTED_VERSION="${3:-0.2.3}"
 
 if [[ -z "$PKG" || -z "$EXPECTED_ARCH" ]]; then
   echo "Usage: $0 <package.pkg> <arm64|x64> [version]" >&2

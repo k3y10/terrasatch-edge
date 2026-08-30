@@ -1,6 +1,6 @@
 workflows:
-  macos-arm64-pilot:
-    name: TerraSatch Edge macOS arm64 pilot
+  macos-arm64-partner-beta:
+    name: TerraSatch Edge macOS arm64 Partner Beta
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -10,10 +10,10 @@ workflows:
         TERRASATCH_MACOS_TARGET_ARCH: "arm64"
         TERRASATCH_MACOS_PYTHON_ARCH: "arm64"
     scripts:
-      - name: Validate macOS build scripts
+      - name: Validate macOS Partner Beta build scripts
         script: |
           set -euo pipefail
-          bash -n scripts/build-macos.sh scripts/verify-macos-pkg.sh
+          bash -n scripts/build-macos.sh scripts/build-macos-partner-beta.sh scripts/verify-macos-pkg.sh
       - name: Install Python 3.12 universal2
         script: |
           set -euo pipefail
@@ -23,26 +23,29 @@ workflows:
           sudo installer -pkg /tmp/python312.pkg -target /
           file "$PYTHON_BIN"
           arch -arm64 "$PYTHON_BIN" -c 'import platform, sys; print(sys.version); print(platform.machine())'
-      - name: Build arm64 package
+      - name: Build arm64 Partner Beta package
         script: |
           set -euo pipefail
-          chmod +x scripts/build-macos.sh scripts/verify-macos-pkg.sh
-          ./scripts/build-macos.sh
-      - name: Verify arm64 package
+          chmod +x scripts/build-macos.sh scripts/build-macos-partner-beta.sh scripts/verify-macos-pkg.sh
+          ./scripts/build-macos-partner-beta.sh
+      - name: Verify arm64 Partner Beta package
         script: |
           set -euo pipefail
-          PKG="release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg"
-          ./scripts/verify-macos-pkg.sh "$PKG" arm64 0.2.2 | tee release/macos-arm64-verification.txt
+          VERSION="$(awk -F'"' '/^version = / {print $2; exit}' pyproject.toml)"
+          PKG="$(find release -maxdepth 1 -name 'TerraSatch-Edge-*-macOS-arm64-partner-beta-*.pkg' -print -quit)"
+          test -n "$PKG"
+          ./scripts/verify-macos-pkg.sh "$PKG" arm64 "$VERSION" | tee release/macos-arm64-verification.txt
           curl -fsS https://api.terrasatch.com/health | tee release/macos-api-health.json
     artifacts:
-      - release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
-      - release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg.sha256
+      - release/TerraSatch-Edge-*-macOS-arm64-partner-beta-*.pkg
+      - release/TerraSatch-Edge-*-macOS-arm64-partner-beta-*.pkg.sha256
+      - release/TerraSatch-Edge-*-macOS-arm64-partner-beta-*.pkg.release.json
       - release/macos-arm64-*.txt
       - release/macos-arm64-*.json
       - release/macos-api-health.json
 
-  macos-x64-pilot:
-    name: TerraSatch Edge macOS Intel x64 pilot
+  macos-x64-partner-beta:
+    name: TerraSatch Edge macOS Intel x64 Partner Beta
     instance_type: mac_mini_m2
     max_build_duration: 45
     environment:
@@ -52,10 +55,10 @@ workflows:
         TERRASATCH_MACOS_TARGET_ARCH: "x64"
         TERRASATCH_MACOS_PYTHON_ARCH: "x86_64"
     scripts:
-      - name: Validate macOS build scripts
+      - name: Validate macOS Partner Beta build scripts
         script: |
           set -euo pipefail
-          bash -n scripts/build-macos.sh scripts/verify-macos-pkg.sh
+          bash -n scripts/build-macos.sh scripts/build-macos-partner-beta.sh scripts/verify-macos-pkg.sh
       - name: Enable Rosetta and install Python 3.12 universal2
         script: |
           set -euo pipefail
@@ -66,20 +69,23 @@ workflows:
           sudo installer -pkg /tmp/python312.pkg -target /
           file "$PYTHON_BIN"
           arch -x86_64 "$PYTHON_BIN" -c 'import platform, sys; print(sys.version); print(platform.machine())'
-      - name: Build Intel x64 package
+      - name: Build Intel x64 Partner Beta package
         script: |
           set -euo pipefail
-          chmod +x scripts/build-macos.sh scripts/verify-macos-pkg.sh
-          ./scripts/build-macos.sh
-      - name: Verify Intel x64 package
+          chmod +x scripts/build-macos.sh scripts/build-macos-partner-beta.sh scripts/verify-macos-pkg.sh
+          ./scripts/build-macos-partner-beta.sh
+      - name: Verify Intel x64 Partner Beta package
         script: |
           set -euo pipefail
-          PKG="release/TerraSatch-Edge-0.2.2-macOS-x64.pkg"
-          ./scripts/verify-macos-pkg.sh "$PKG" x64 0.2.2 | tee release/macos-x64-verification.txt
+          VERSION="$(awk -F'"' '/^version = / {print $2; exit}' pyproject.toml)"
+          PKG="$(find release -maxdepth 1 -name 'TerraSatch-Edge-*-macOS-x64-partner-beta-*.pkg' -print -quit)"
+          test -n "$PKG"
+          ./scripts/verify-macos-pkg.sh "$PKG" x64 "$VERSION" | tee release/macos-x64-verification.txt
           curl -fsS https://api.terrasatch.com/health | tee release/macos-api-health.json
     artifacts:
-      - release/TerraSatch-Edge-0.2.2-macOS-x64.pkg
-      - release/TerraSatch-Edge-0.2.2-macOS-x64.pkg.sha256
+      - release/TerraSatch-Edge-*-macOS-x64-partner-beta-*.pkg
+      - release/TerraSatch-Edge-*-macOS-x64-partner-beta-*.pkg.sha256
+      - release/TerraSatch-Edge-*-macOS-x64-partner-beta-*.pkg.release.json
       - release/macos-x64-*.txt
       - release/macos-x64-*.json
       - release/macos-api-health.json
