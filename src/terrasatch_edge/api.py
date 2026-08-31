@@ -5,12 +5,22 @@ from typing import Any
 import httpx
 
 from . import __version__
-from .models import ApiIdentity, EdgeDevice, PairingClaim, PairingStart, SiteSummary, SystemSnapshot
+from .models import (
+    ApiIdentity,
+    EdgeCommand,
+    EdgeDevice,
+    PairingClaim,
+    PairingStart,
+    SiteSummary,
+    SystemSnapshot,
+)
 from .tooling import find_executable
 
 
 class TerraSatchApiError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 _RADIO_CAPABILITY_ALIASES = {
@@ -80,7 +90,10 @@ class TerraSatchApiClient:
             raise TerraSatchApiError(str(exc)) from exc
         if response.status_code >= 400:
             detail = response.text.strip()[:500]
-            raise TerraSatchApiError(f"HTTP {response.status_code}: {detail or response.reason_phrase}")
+            raise TerraSatchApiError(
+                f"HTTP {response.status_code}: {detail or response.reason_phrase}",
+                status_code=response.status_code,
+            )
         return response
 
     def health(self) -> dict[str, Any]:
@@ -178,6 +191,39 @@ class TerraSatchApiClient:
         if not isinstance(payload, dict):
             raise TerraSatchApiError("Unexpected /api/v1/edge/config response")
         return payload
+
+    def edge_commands(self, *, limit: int = 50) -> list[EdgeCommand]:
+        """Poll work assigned by the API to this exact paired Edge credential."""
+
+        response = self._request(
+            "GET",
+            "/api/v1/edge/commands",
+            params={"limit": max(1, min(limit, 100))},
+        )
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise TerraSatchApiError("Unexpected /api/v1/edge/commands response")
+        return [EdgeCommand.model_validate(item) for item in payload]
+
+    def acknowledge_edge_command(self, command_id: str) -> EdgeCommand:
+        response = self._request("POST", f"/api/v1/edge/commands/{command_id}/ack")
+        return EdgeCommand.model_validate(response.json())
+
+    def report_edge_command_result(
+        self,
+        command_id: str,
+        *,
+        status: str,
+        detail: str | None = None,
+    ) -> EdgeCommand:
+        if status not in {"simulated", "failed"}:
+            raise ValueError("Edge command result must be 'simulated' or 'failed'")
+        response = self._request(
+            "POST",
+            f"/api/v1/edge/commands/{command_id}/result",
+            json={"status": status, "detail": detail},
+        )
+        return EdgeCommand.model_validate(response.json())
 
     def ingest_text(
         self,

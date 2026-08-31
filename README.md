@@ -4,7 +4,7 @@
 
 TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
-> Current source milestone: **v0.2.3 receive-only BCA/FRS pilot + native operator experience**  
+> Current source milestone: **v0.2.4 simulation-only Satchy command client + unchanged v0.2.3 BCA/FRS receive pilot**
 > Current public Windows installer: **v0.2.2** while the v0.2.3 Windows artifact completes the signed native release gate.  
 > Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge) · exact v0.2.3 source snapshot: [`87961ce`](https://github.com/k3y10/terrasatch-edge/commit/87961cea7d2cdd8ad57b8d48b0732f0c694b0c97)
 
@@ -24,7 +24,7 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
                   TerraListen / Satchy
 ```
 
-## v0.2.3 development capabilities
+## v0.2.4 development capabilities
 
 - Windows, macOS and Linux shared runtime
 - guided local Operator Console plus terminal/CLI mode
@@ -45,12 +45,17 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
 - GPS/GNSS, serial, USB audio and network inventory
 - periodic Edge heartbeat and hardware inventory sync
 - remote Edge configuration retrieval
+- device/site-bound Edge command polling
+- idempotent command acknowledgement and retry after interrupted result delivery
+- simulation-only `radio_reply` completion with explicit refusal of physical RF/PTT work
 - running services can pick up pairing/config changes without reinstalling
 - local diagnostics and status UI
 - production-style test transmission ingestion through the CLI
 - native packaging for Windows, macOS and Debian/Ubuntu
 
-The v0.2.3 BCA/FRS path is **receive-only**. It does not transmit through the SDR. BCA privacy/sub-channel codes do not change the carrier frequency, and the current pilot listens channel-wide rather than filtering CTCSS/DCS codes.
+The v0.2.3 BCA/FRS path remains **receive-only** in v0.2.4. It does not transmit through the SDR. BCA privacy/sub-channel codes do not change the carrier frequency, and the current pilot listens channel-wide rather than filtering CTCSS/DCS codes. The new command client only acknowledges API work and reports `simulated`; it never opens a TX/PTT provider.
+
+See [`docs/SATCHY_COMMAND_CLIENT.md`](docs/SATCHY_COMMAND_CLIENT.md) for the paired API/Edge validation flow and the simulation-only safety boundary.
 
 ## Recommended operator setup
 
@@ -113,6 +118,7 @@ terrasatch-edge radio-channels
 terrasatch-edge listen-radio --channel 5 --once --callsign "BCA TEST"
 terrasatch-edge run --once
 terrasatch-edge run
+terrasatch-edge commands
 terrasatch-edge ui
 terrasatch-edge ingest-text "Wind loading near the ridgeline" --callsign "Field Test 1"
 terrasatch-edge paths

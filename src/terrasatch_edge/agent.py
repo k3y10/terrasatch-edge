@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .api import TerraSatchApiClient, TerraSatchApiError
+from .commands import process_edge_commands
 from .config import EdgeConfig, load_api_key, load_config, save_remote_config
 from .discovery import save_snapshot, scan_hardware
 
@@ -49,12 +50,13 @@ class EdgeAgent:
             heartbeat = self.client.heartbeat(snapshot)
             remote_config = self.client.remote_config()
             save_remote_config(remote_config)
+            command_cycle = process_edge_commands(self.client)
             device = heartbeat.get("device") if isinstance(heartbeat, dict) else None
             device_name = device.get("name") if isinstance(device, dict) else self.config.node_name
             return (
-                True,
+                command_cycle.ok,
                 f"Edge online as {device_name or self.config.node_name or snapshot.hostname}; "
-                f"{len(snapshot.devices)} hardware records synced",
+                f"{len(snapshot.devices)} hardware records synced; {command_cycle.summary()}",
             )
         except TerraSatchApiError as exc:
             return False, f"Edge heartbeat failed; snapshot retained locally: {exc}"

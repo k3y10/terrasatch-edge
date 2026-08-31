@@ -91,6 +91,23 @@ class PairingClaim(BaseModel):
     device: EdgeDevice | None = None
 
 
+class EdgeCommand(BaseModel):
+    """One device-bound command returned by the TerraSatch API control plane."""
+
+    id: str
+    organization_id: str
+    site_id: str
+    edge_device_id: str
+    command_type: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    priority: int = 100
+    status: str
+    created_at: datetime
+    expires_at: datetime | None = None
+    acknowledged_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
 class EdgeStatus(BaseModel):
     configured: bool
     api_url: str
