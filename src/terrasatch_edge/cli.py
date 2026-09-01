@@ -17,6 +17,7 @@ from rich.table import Table
 from . import __version__
 from .agent import EdgeAgent
 from .api import TerraSatchApiClient, TerraSatchApiError
+from .commands import process_edge_commands
 from .config import (
     EdgeConfig,
     clear_api_key,
@@ -386,7 +387,7 @@ def ingest_text(
 
 @app.command()
 def run(once: Annotated[bool, typer.Option("--once", help="Run one agent cycle and exit.")] = False) -> None:
-    """Run Edge heartbeats, hardware inventory sync, and remote configuration fetches."""
+    """Run heartbeats, inventory/config sync, and safe Edge command processing."""
     agent = EdgeAgent()
     if once:
         ok, message = agent.tick()
@@ -400,6 +401,28 @@ def run(once: Annotated[bool, typer.Option("--once", help="Run one agent cycle a
         console.print(f"{'[green]✓[/green]' if ok else '[yellow]![/yellow]'} {message}")
 
     agent.run_forever(on_tick=on_tick)
+
+
+@app.command("commands")
+def process_commands(
+    limit: Annotated[int, typer.Option(min=1, max=100)] = 50,
+) -> None:
+    """Poll and process assigned commands using the simulation-only handler."""
+
+    config = load_config()
+    key = load_api_key()
+    if not key:
+        console.print("[red]No Edge credential configured. Run `terrasatch-edge setup`.[/red]")
+        raise typer.Exit(2)
+    cycle = process_edge_commands(TerraSatchApiClient(config.api_url, key), limit=limit)
+    marker = "[green]✓[/green]" if cycle.ok else "[yellow]![/yellow]"
+    console.print(f"{marker} {cycle.summary()}")
+    for outcome in cycle.outcomes:
+        console.print(f"  {outcome.command_id} · {outcome.command_type} · {outcome.result}")
+    for error in cycle.errors:
+        console.print(f"  [yellow]{error}[/yellow]")
+    if not cycle.ok:
+        raise typer.Exit(3)
 
 
 @app.command()

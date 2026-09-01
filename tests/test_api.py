@@ -8,7 +8,7 @@ import pytest
 import terrasatch_edge.api as edge_api
 from terrasatch_edge.adapters import classify_device
 from terrasatch_edge.api import TerraSatchApiClient, TerraSatchApiError, reported_capabilities
-from terrasatch_edge.models import DeviceKind, HardwareDevice, SystemSnapshot
+from terrasatch_edge.models import DeviceKind, EdgeCommand, HardwareDevice, SystemSnapshot
 
 
 def _snapshot(*devices: HardwareDevice) -> SystemSnapshot:
@@ -38,8 +38,62 @@ def test_http_error_wraps(monkeypatch):
 
     monkeypatch.setattr(httpx, "request", fake_request)
     client = TerraSatchApiClient("https://api.example", "bad")
-    with pytest.raises(TerraSatchApiError, match="401"):
+    with pytest.raises(TerraSatchApiError, match="401") as captured:
         client.identity()
+    assert captured.value.status_code == 401
+
+
+def _command_payload(*, status: str = "dispatched") -> dict[str, object]:
+    return {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "organization_id": "22222222-2222-2222-2222-222222222222",
+        "site_id": "33333333-3333-3333-3333-333333333333",
+        "edge_device_id": "44444444-4444-4444-4444-444444444444",
+        "command_type": "radio_reply",
+        "payload": {"text": "Control 2, Satchy. Go ahead.", "simulate_only": True},
+        "priority": 100,
+        "status": status,
+        "created_at": "2026-08-31T12:00:00Z",
+        "expires_at": None,
+        "acknowledged_at": None,
+        "completed_at": None,
+    }
+
+
+def test_edge_command_client_matches_api_poll_ack_and_result_contract(monkeypatch) -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+
+    def fake_request(method, url, **kwargs):
+        calls.append((method, url, kwargs))
+        status = "dispatched"
+        if url.endswith("/ack"):
+            status = "acknowledged"
+        elif url.endswith("/result"):
+            status = "completed"
+        payload: object = [_command_payload(status=status)] if method == "GET" else _command_payload(status=status)
+        return httpx.Response(200, request=httpx.Request(method, url), json=payload)
+
+    monkeypatch.setattr(httpx, "request", fake_request)
+    client = TerraSatchApiClient("https://api.example", "paired-device-key")
+
+    commands = client.edge_commands(limit=500)
+    acknowledged = client.acknowledge_edge_command(commands[0].id)
+    completed = client.report_edge_command_result(
+        commands[0].id,
+        status="simulated",
+        detail="No RF/PTT operation was attempted",
+    )
+
+    assert isinstance(commands[0], EdgeCommand)
+    assert acknowledged.status == "acknowledged"
+    assert completed.status == "completed"
+    assert calls[0][0:2] == ("GET", "https://api.example/api/v1/edge/commands")
+    assert calls[0][2]["params"] == {"limit": 100}
+    assert calls[1][1].endswith(f"/commands/{commands[0].id}/ack")
+    assert calls[2][2]["json"] == {
+        "status": "simulated",
+        "detail": "No RF/PTT operation was attempted",
+    }
 
 
 def test_rtl_receive_capability_requires_complete_receive_runtime(monkeypatch):
