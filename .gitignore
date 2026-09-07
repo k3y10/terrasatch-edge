@@ -13,6 +13,7 @@ release/
 *.egg-info/
 .pytest_cache/
 .pytest-tmp-*/
+.pytest-*/
 .ruff_cache/
 .coverage
 htmlcov/

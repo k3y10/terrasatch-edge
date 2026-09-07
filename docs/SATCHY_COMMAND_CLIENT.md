@@ -41,3 +41,7 @@ terrasatch-edge listen-radio \
   --callsign "BCA TEST" \
   --hotwords "TerraSatch, Cardiff Bowl, BCA"
 ```
+
+## Channel-aware development branch
+
+The agent additionally checks paired identity and unchanged ACK payloads. Physical RF remains blocked by the current API result contract. See [the QA report](EDGE_UPDATE_QA.md) for the provider boundary and remaining completion work.

@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+from .config import EdgeConfig
+from .radio_providers import SimulationRadioProvider, rf_execution_blocker
 
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .models import EdgeCommand
@@ -45,6 +49,11 @@ class CommandCycle:
 def _result_for(command: EdgeCommand) -> tuple[str, str]:
     """Choose a result without invoking any radio, audio, or hardware provider."""
 
+    if command.expires_at is not None:
+        if command.expires_at.utcoffset() is None or command.expires_at <= datetime.now(UTC):
+            return "failed", "Expired or timezone-ambiguous command; no operation performed"
+    if command.status != "acknowledged":
+        return "failed", "Command is not acknowledged; no operation performed"
     if command.command_type != "radio_reply":
         return (
             "failed",
@@ -53,18 +62,21 @@ def _result_for(command: EdgeCommand) -> tuple[str, str]:
     if command.payload.get("simulate_only") is not True:
         return (
             "failed",
-            "radio_reply rejected because simulate_only was not explicitly true; no RF/PTT operation performed",
+            "radio_reply rejected because simulate_only was not explicitly true. " + rf_execution_blocker(),
         )
-    return (
-        "simulated",
-        "Simulation-only radio reply accepted; no RF/PTT operation was attempted",
-    )
+    if command.payload.get("reply_route") not in (None, "simulation"):
+        return "failed", "Conflicting simulation and reply route; no operation performed"
+    text = command.payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return "failed", "Radio reply text is missing; no operation performed"
+    return SimulationRadioProvider().simulate()
 
 
 def process_edge_commands(
     client: TerraSatchApiClient,
     *,
     limit: int = 50,
+    config: EdgeConfig | None = None,
 ) -> CommandCycle:
     """Poll, ACK, and terminally report device-owned commands one at a time.
 
@@ -83,8 +95,27 @@ def process_edge_commands(
     cycle.polled = len(commands)
     for command in commands:
         try:
+            original = command
+            if config is not None and (
+                not config.device_id or not config.site_id or not config.organization_id
+                or command.edge_device_id != config.device_id
+                or command.site_id != config.site_id
+                or command.organization_id != config.organization_id
+            ):
+                cycle.errors.append(f"{command.id}: Command does not match paired identity")
+                continue
+            if command.status not in {"queued", "dispatched", "acknowledged"}:
+                cycle.errors.append(f"{command.id}: Command is already terminal or invalid")
+                continue
             if command.status != "acknowledged":
                 command = client.acknowledge_edge_command(command.id)
+            if (command.id, command.edge_device_id, command.site_id, command.organization_id,
+                command.command_type, command.payload) != (
+                original.id, original.edge_device_id, original.site_id, original.organization_id,
+                original.command_type, original.payload
+            ):
+                cycle.errors.append(f"{original.id}: ACK returned a different command")
+                continue
             result, detail = _result_for(command)
             client.report_edge_command_result(
                 command.id,

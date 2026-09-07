@@ -49,7 +49,7 @@ def test_agent_tick_keeps_receive_scan_and_processes_commands_after_sync(monkeyp
     events: list[str] = []
 
     class FakeClient:
-        def heartbeat(self, received_snapshot):
+        def heartbeat(self, received_snapshot, *, telemetry=None):
             assert received_snapshot is snapshot
             events.append("heartbeat")
             return {"device": {"name": "Edge 1"}}
@@ -64,7 +64,7 @@ def test_agent_tick_keeps_receive_scan_and_processes_commands_after_sync(monkeyp
     monkeypatch.setattr(agent_module, "save_snapshot", lambda _snapshot: events.append("snapshot"))
     monkeypatch.setattr(agent_module, "save_remote_config", lambda _config: events.append("save_config"))
 
-    def fake_process(client):
+    def fake_process(client, *, config=None):
         assert isinstance(client, FakeClient)
         events.append("commands")
         return CommandCycle(

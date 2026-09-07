@@ -6,6 +6,7 @@ import platform
 import uuid
 from pathlib import Path
 from typing import Any
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -34,6 +35,9 @@ def ingest_audio_file(
     channel_id: str | None = None,
     hotwords: str | None = None,
     initial_prompt: str | None = None,
+    started_at: datetime | None = None,
+    ended_at: datetime | None = None,
+    rf_metadata: dict[str, Any] | None = None,
 ) -> AudioIngestResult:
     """Transcribe a bounded audio file and submit it through `/api/v1/transmissions`."""
 
@@ -50,7 +54,7 @@ def ingest_audio_file(
     message_id = source_message_id or f"edge-audio-{platform.node()}-{uuid.uuid4()}"
     response = client.ingest_text(
         site_id=target_site,
-        text=transcript.normalized_text,
+        text=transcript.raw_text,
         callsign=callsign,
         source_message_id=message_id,
         source=source or f"{config.source}-stt",
@@ -60,6 +64,9 @@ def ingest_audio_file(
         transcript_model=transcript.model,
         transcript_language=transcript.language,
         transcript_confidence=transcript.language_confidence,
+        started_at=started_at.isoformat() if started_at is not None else None,
+        ended_at=ended_at.isoformat() if ended_at is not None else None,
+        rf_metadata=rf_metadata,
     )
     return AudioIngestResult(
         source_message_id=message_id,

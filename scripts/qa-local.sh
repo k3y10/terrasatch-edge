@@ -13,6 +13,11 @@ WITH_SPEECH="${TERRASATCH_QA_WITH_SPEECH:-0}"
 # QA must not inherit production credentials or call the production API.
 export TERRASATCH_EDGE_API_URL=http://127.0.0.1:18000
 unset TERRASATCH_EDGE_API_KEY || true
+QA_STATE_ROOT="$(mktemp -d)"
+trap 'rm -rf "$QA_STATE_ROOT"' EXIT
+export TERRASATCH_EDGE_CONFIG_DIR="$QA_STATE_ROOT/config"
+export TERRASATCH_EDGE_STATE_DIR="$QA_STATE_ROOT/state"
+export NO_PROXY="127.0.0.1,localhost,${NO_PROXY:-}"
 
 printf '\nTerraSatch Edge local QA\n'
 printf 'Repository: %s\n' "$ROOT"
@@ -36,9 +41,9 @@ source "$VENV_DIR/bin/activate"
 
 python -m pip install --upgrade pip
 if [[ "$WITH_SPEECH" == "1" ]]; then
-  python -m pip install -e '.[dev,speech]'
+  python -m pip install -e '.[dev,ui,speech]'
 else
-  python -m pip install -e '.[dev]'
+  python -m pip install -e '.[dev,ui]'
 fi
 python -m pip check
 

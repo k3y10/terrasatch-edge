@@ -36,6 +36,10 @@ _RADIO_CAPABILITY_ALIASES = {
     "transmit",
     "ptt",
     "audio:capture",
+    "audio:output",
+    "radio:ptt",
+    "radio:half_duplex",
+    "radio:full_duplex",
 }
 
 
@@ -119,7 +123,11 @@ class TerraSatchApiClient:
             rows = [row for row in payload if isinstance(row, dict)]
         elif isinstance(payload, dict):
             candidate = payload.get("items") or payload.get("sites") or payload.get("data") or []
-            rows = [row for row in candidate if isinstance(row, dict)] if isinstance(candidate, list) else []
+            rows = (
+                [row for row in candidate if isinstance(row, dict)]
+                if isinstance(candidate, list)
+                else []
+            )
         else:
             rows = []
 
@@ -170,7 +178,12 @@ class TerraSatchApiClient:
     def edge_me(self) -> EdgeDevice:
         return EdgeDevice.model_validate(self._request("GET", "/api/v1/edge/me").json())
 
-    def heartbeat(self, snapshot: SystemSnapshot) -> dict[str, Any]:
+    def heartbeat(
+        self,
+        snapshot: SystemSnapshot,
+        *,
+        telemetry: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         capabilities = reported_capabilities(snapshot)
         inventory = [device.model_dump(mode="json") for device in snapshot.devices]
         response = self._request(
@@ -180,6 +193,7 @@ class TerraSatchApiClient:
                 "agent_version": __version__,
                 "hardware_inventory": inventory,
                 "capabilities": capabilities,
+                "telemetry": telemetry or {},
             },
         )
         payload = response.json()
@@ -239,6 +253,9 @@ class TerraSatchApiClient:
         transcript_model: str | None = None,
         transcript_language: str | None = None,
         transcript_confidence: float | None = None,
+        started_at: str | None = None,
+        ended_at: str | None = None,
+        rf_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         body = {
             "site_id": site_id,
@@ -252,6 +269,9 @@ class TerraSatchApiClient:
             "transcript_model": transcript_model,
             "transcript_language": transcript_language,
             "transcript_confidence": transcript_confidence,
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "rf_metadata": rf_metadata or {},
         }
         response = self._request("POST", "/api/v1/transmissions", json=body)
         payload = response.json()

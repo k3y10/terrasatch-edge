@@ -81,6 +81,7 @@ def test_config_update_preserves_pairing_assignment(tmp_path, monkeypatch):
 def test_config_update_cannot_redirect_api_target(tmp_path, monkeypatch):
     _configure_paths(tmp_path, monkeypatch)
     save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+    original_api_url = load_config().api_url
 
     client = TestClient(local_ui.build_app())
     response = client.put(
@@ -90,7 +91,7 @@ def test_config_update_cannot_redirect_api_target(tmp_path, monkeypatch):
     )
 
     assert response.status_code == 422
-    assert load_config().api_url == "https://api.terrasatch.com"
+    assert load_config().api_url == original_api_url
 
 
 def test_status_payload_does_not_expose_remote_config_or_identity(tmp_path, monkeypatch):

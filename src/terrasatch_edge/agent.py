@@ -9,6 +9,7 @@ from .api import TerraSatchApiClient, TerraSatchApiError
 from .commands import process_edge_commands
 from .config import EdgeConfig, load_api_key, load_config, save_remote_config
 from .discovery import save_snapshot, scan_hardware
+from .radio_service import read_radio_status
 
 
 @dataclass
@@ -47,10 +48,10 @@ class EdgeAgent:
                 return False, f"API unavailable; snapshot saved locally: {exc}"
 
         try:
-            heartbeat = self.client.heartbeat(snapshot)
+            heartbeat = self.client.heartbeat(snapshot, telemetry={"radio": read_radio_status()})
             remote_config = self.client.remote_config()
             save_remote_config(remote_config)
-            command_cycle = process_edge_commands(self.client)
+            command_cycle = process_edge_commands(self.client, config=self.config)
             device = heartbeat.get("device") if isinstance(heartbeat, dict) else None
             device_name = device.get("name") if isinstance(device, dict) else self.config.node_name
             return (
