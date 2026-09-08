@@ -15,6 +15,16 @@ def test_console_scripts_use_shared_version_aware_entrypoint() -> None:
     assert scripts["tsedge"] == "terrasatch_edge.entrypoint:main"
 
 
+def test_windows_installer_version_matches_project_version() -> None:
+    payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version = payload["project"]["version"]
+    installer = (ROOT / "packaging" / "windows" / "TerraSatchEdge.iss").read_text(
+        encoding="utf-8"
+    )
+
+    assert f'#define MyAppVersion "{version}"' in installer
+
+
 def test_windows_setup_uses_production_api_environment_contract() -> None:
     script = (ROOT / "packaging" / "windows" / "TerraSatchEdgeSetup.ps1").read_text(
         encoding="utf-8"
