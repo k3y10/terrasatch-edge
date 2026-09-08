@@ -18,6 +18,7 @@ from . import __version__
 from .agent import EdgeAgent
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .commands import process_edge_commands
+from .tx_bridge import ExternalRadioTxProvider
 from .config import (
     EdgeConfig,
     clear_api_key,
@@ -407,14 +408,23 @@ def run(once: Annotated[bool, typer.Option("--once", help="Run one agent cycle a
 def process_commands(
     limit: Annotated[int, typer.Option(min=1, max=100)] = 50,
 ) -> None:
-    """Poll and process assigned commands using the simulation-only handler."""
+    """Process assigned simulation or explicitly configured provider replies."""
 
     config = load_config()
     key = load_api_key()
     if not key:
         console.print("[red]No Edge credential configured. Run `terrasatch-edge setup`.[/red]")
         raise typer.Exit(2)
-    cycle = process_edge_commands(TerraSatchApiClient(config.api_url, key), limit=limit)
+    client = TerraSatchApiClient(config.api_url, key)
+    try:
+        remote_config = client.remote_config()
+        provider = (ExternalRadioTxProvider(config.radio_tx_executable)
+                    if config.radio_tx_enabled and config.radio_tx_executable else None)
+        cycle = process_edge_commands(client, limit=limit, config=config,
+                                      remote_config=remote_config, provider=provider)
+    except (TerraSatchApiError, ValueError) as exc:
+        console.print(f"[red]Command processing unavailable:[/red] {exc}")
+        raise typer.Exit(2) from exc
     marker = "[green]✓[/green]" if cycle.ok else "[yellow]![/yellow]"
     console.print(f"{marker} {cycle.summary()}")
     for outcome in cycle.outcomes:
@@ -462,3 +472,32 @@ def show_paths() -> None:
 
 if __name__ == "__main__":
     app()
+
+
+@app.command("reconcile-radio-command")
+def reconcile_radio_command(
+    command_id: str,
+    confirm_stopped: bool = typer.Option(
+        False, "--confirm-stopped",
+        help="Confirm the provider is stopped and PTT released; mark the uncertain attempt failed.",
+    ),
+) -> None:
+    """Resolve a locally interrupted attempt without sending RF again."""
+    from .command_journal import CommandJournal
+
+    if not confirm_stopped:
+        console.print("[red]Confirm the provider is stopped and PTT released with --confirm-stopped.[/red]")
+        raise typer.Exit(2)
+    config = load_config()
+    if not all((config.organization_id, config.site_id, config.device_id)):
+        console.print("[red]A complete paired identity is required.[/red]")
+        raise typer.Exit(2)
+    scope = '|'.join([config.api_url, config.organization_id, config.site_id, config.device_id])
+    try:
+        CommandJournal(get_paths().state_dir / 'radio-command-journal.sqlite3').reconcile_failed(
+            scope, command_id,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    console.print("Recorded failed/uncertain outcome; next command cycle reports it without replay.")

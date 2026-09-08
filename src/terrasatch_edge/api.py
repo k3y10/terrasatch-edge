@@ -183,8 +183,9 @@ class TerraSatchApiClient:
         snapshot: SystemSnapshot,
         *,
         telemetry: dict[str, Any] | None = None,
+        provider_capabilities: set[str] | None = None,
     ) -> dict[str, Any]:
-        capabilities = reported_capabilities(snapshot)
+        capabilities = sorted(set(reported_capabilities(snapshot)) | (provider_capabilities or set()))
         inventory = [device.model_dump(mode="json") for device in snapshot.devices]
         response = self._request(
             "POST",
@@ -205,6 +206,20 @@ class TerraSatchApiClient:
         if not isinstance(payload, dict):
             raise TerraSatchApiError("Unexpected /api/v1/edge/config response")
         return payload
+
+    def supports_transmitted_results(self) -> bool:
+        try:
+            response = self._request("GET", "/api/v1/edge/command-capabilities")
+            payload = response.json()
+        except TerraSatchApiError as exc:
+            if exc.status_code in {404, 405}:
+                return False
+            raise
+        except ValueError as exc:
+            raise TerraSatchApiError("Invalid command capabilities response") from exc
+        return (isinstance(payload, dict) and payload.get("version") == 1
+                and isinstance(payload.get("result_statuses"), list)
+                and "transmitted" in payload["result_statuses"])
 
     def edge_commands(self, *, limit: int = 50) -> list[EdgeCommand]:
         """Poll work assigned by the API to this exact paired Edge credential."""
@@ -230,8 +245,8 @@ class TerraSatchApiClient:
         status: str,
         detail: str | None = None,
     ) -> EdgeCommand:
-        if status not in {"simulated", "failed"}:
-            raise ValueError("Edge command result must be 'simulated' or 'failed'")
+        if status not in {"simulated", "transmitted", "failed"}:
+            raise ValueError("Edge command result must be 'simulated', 'transmitted' or 'failed'")
         response = self._request(
             "POST",
             f"/api/v1/edge/commands/{command_id}/result",

@@ -1,5 +1,9 @@
 # Channel-aware Edge integration and QA — 2026-09-07
 
+**Follow-up:** the September 8 provider/result implementation supersedes the RF blocker below.
+See [current provider behavior and compatibility tests](RADIO_TX_PROVIDER.md). The results
+on this page describe the initial integration commit, not the newer follow-up.
+
 ## Branch decision
 
 Continue on `feat/channel-aware-radio-ingest`, as specified in the September 4 scope.

@@ -49,10 +49,10 @@ python -m pip check
 
 git diff --check
 
-printf '\n[1/6] Ruff\n'
+printf '\n[1/7] Ruff\n'
 ruff check src tests
 
-printf '\n[2/6] Compile/import smoke\n'
+printf '\n[2/7] Compile/import smoke\n'
 python -m compileall -q src tests
 python - <<'PY'
 import terrasatch_edge
@@ -65,10 +65,10 @@ print(f"Speech provider: {FasterWhisperSpeechProvider.name}")
 print(f"Canonical audio ingest: {ingest_audio_file.__name__}")
 PY
 
-printf '\n[3/6] Complete repository regression suite\n'
+printf '\n[3/7] Complete repository regression suite\n'
 pytest
 
-printf '\n[4/6] Changed speech/ingest/config coverage gate (>=75%%)\n'
+printf '\n[4/7] Changed speech/ingest/config coverage gate (>=75%%)\n'
 pytest \
   --cov=terrasatch_edge.speech \
   --cov=terrasatch_edge.ingest \
@@ -79,12 +79,21 @@ pytest \
 
 printf '\nNote: full-package coverage is not used as the release gate yet because the pre-existing\nCLI/discovery/doctor/local_ui modules were never covered to the repository-wide 75%% target.\nThe full regression suite above still executes every repository test; the coverage gate applies\nto the speech-ingestion/config surface introduced or materially changed in Edge 0.2.0.\n'
 
-printf '\n[5/6] CLI smoke\n'
+printf '\n[5/7] Command/TX coverage gate (>=90%%)\n'
+pytest \
+  --cov=terrasatch_edge.commands \
+  --cov=terrasatch_edge.radio_execution \
+  --cov=terrasatch_edge.command_journal \
+  --cov=terrasatch_edge.tx_bridge \
+  --cov-report=term-missing \
+  --cov-fail-under=90
+
+printf '\n[6/7] CLI smoke\n'
 terrasatch-edge --help >/dev/null
 terrasatch-edge ingest-audio --help >/dev/null
 terrasatch-edge version
 
-printf '\n[6/6] Optional speech dependency smoke\n'
+printf '\n[7/7] Optional speech dependency smoke\n'
 if [[ "$WITH_SPEECH" == "1" ]]; then
   python - <<'PY'
 import faster_whisper

@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from .config import EdgeConfig
-from .radio_providers import SimulationRadioProvider, rf_execution_blocker
+from .radio_providers import RadioTxProvider, SimulationRadioProvider, rf_execution_blocker
+from .radio_execution import execute_radio_reply
 
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .models import EdgeCommand
@@ -35,10 +36,13 @@ class CommandCycle:
         if self.poll_error:
             return f"command polling unavailable: {self.poll_error}"
         simulated = sum(outcome.result == "simulated" for outcome in self.outcomes)
+        transmitted = sum(outcome.result == "transmitted" for outcome in self.outcomes)
         failed = sum(outcome.result == "failed" for outcome in self.outcomes)
         if not self.polled:
             return "no Edge commands pending"
         detail = f"{self.polled} command(s) polled; {simulated} simulated"
+        if transmitted:
+            detail += f"; {transmitted} transmitted"
         if failed:
             detail += f"; {failed} safely rejected"
         if self.errors:
@@ -77,6 +81,8 @@ def process_edge_commands(
     *,
     limit: int = 50,
     config: EdgeConfig | None = None,
+    remote_config: dict | None = None,
+    provider: RadioTxProvider | None = None,
 ) -> CommandCycle:
     """Poll, ACK, and terminally report device-owned commands one at a time.
 
@@ -116,7 +122,15 @@ def process_edge_commands(
             ):
                 cycle.errors.append(f"{original.id}: ACK returned a different command")
                 continue
-            result, detail = _result_for(command)
+            if command.payload.get("simulate_only") is False and command.command_type == "radio_reply" and config is not None:
+                if command.status != "acknowledged":
+                    raise ValueError("RF command is not acknowledged")
+                result, detail = execute_radio_reply(
+                    command, client=client, config=config,
+                    remote_config=remote_config or {}, provider=provider,
+                )
+            else:
+                result, detail = _result_for(command)
             client.report_edge_command_result(
                 command.id,
                 status=result,
@@ -130,6 +144,6 @@ def process_edge_commands(
                     detail=detail,
                 )
             )
-        except TerraSatchApiError as exc:
+        except (TerraSatchApiError, ValueError, RuntimeError, OSError) as exc:
             cycle.errors.append(f"{command.id}: {exc}")
     return cycle

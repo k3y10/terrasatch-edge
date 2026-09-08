@@ -1,5 +1,8 @@
 # Satchy command client
 
+The historical simulation-only milestone below is extended by the
+[current bidirectional provider implementation](RADIO_TX_PROVIDER.md).
+
 TerraSatch Edge v0.2.4 adds the first API-to-Edge outbound control-plane client while preserving the v0.2.3 receive-only radio pilot.
 
 ## Safety boundary

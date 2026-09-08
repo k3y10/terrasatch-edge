@@ -49,6 +49,12 @@ class EdgeConfig(BaseModel):
     speech_vad_filter: bool = True
     speech_local_files_only: bool = False
 
+    # Local operator configuration only: never sourced from remote radio policy.
+    radio_tx_enabled: bool = False
+    radio_tx_executable: str | None = None
+    radio_tx_max_seconds: float = Field(default=15, gt=0, le=60)
+    radio_tx_cooldown_seconds: float = Field(default=10, ge=0, le=3600)
+
     # Receive-only BCA/FRS pilot settings. These do not enable SDR transmission.
     radio_profile: str = "bca-frs-na"
     radio_channel: int | None = Field(default=None, ge=1, le=22)
