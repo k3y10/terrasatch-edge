@@ -1,5 +1,8 @@
 # Satchy command client
 
+The historical simulation-only milestone below is extended by the
+[current bidirectional provider implementation](RADIO_TX_PROVIDER.md).
+
 TerraSatch Edge v0.2.4 adds the first API-to-Edge outbound control-plane client while preserving the v0.2.3 receive-only radio pilot.
 
 ## Safety boundary
@@ -41,3 +44,7 @@ terrasatch-edge listen-radio \
   --callsign "BCA TEST" \
   --hotwords "TerraSatch, Cardiff Bowl, BCA"
 ```
+
+## Channel-aware development branch
+
+The agent additionally checks paired identity and unchanged ACK payloads. Physical RF remains blocked by the current API result contract. See [the QA report](EDGE_UPDATE_QA.md) for the provider boundary and remaining completion work.

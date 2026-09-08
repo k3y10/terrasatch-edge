@@ -36,6 +36,10 @@ _RADIO_CAPABILITY_ALIASES = {
     "transmit",
     "ptt",
     "audio:capture",
+    "audio:output",
+    "radio:ptt",
+    "radio:half_duplex",
+    "radio:full_duplex",
 }
 
 
@@ -119,7 +123,11 @@ class TerraSatchApiClient:
             rows = [row for row in payload if isinstance(row, dict)]
         elif isinstance(payload, dict):
             candidate = payload.get("items") or payload.get("sites") or payload.get("data") or []
-            rows = [row for row in candidate if isinstance(row, dict)] if isinstance(candidate, list) else []
+            rows = (
+                [row for row in candidate if isinstance(row, dict)]
+                if isinstance(candidate, list)
+                else []
+            )
         else:
             rows = []
 
@@ -170,8 +178,14 @@ class TerraSatchApiClient:
     def edge_me(self) -> EdgeDevice:
         return EdgeDevice.model_validate(self._request("GET", "/api/v1/edge/me").json())
 
-    def heartbeat(self, snapshot: SystemSnapshot) -> dict[str, Any]:
-        capabilities = reported_capabilities(snapshot)
+    def heartbeat(
+        self,
+        snapshot: SystemSnapshot,
+        *,
+        telemetry: dict[str, Any] | None = None,
+        provider_capabilities: set[str] | None = None,
+    ) -> dict[str, Any]:
+        capabilities = sorted(set(reported_capabilities(snapshot)) | (provider_capabilities or set()))
         inventory = [device.model_dump(mode="json") for device in snapshot.devices]
         response = self._request(
             "POST",
@@ -180,6 +194,7 @@ class TerraSatchApiClient:
                 "agent_version": __version__,
                 "hardware_inventory": inventory,
                 "capabilities": capabilities,
+                "telemetry": telemetry or {},
             },
         )
         payload = response.json()
@@ -191,6 +206,20 @@ class TerraSatchApiClient:
         if not isinstance(payload, dict):
             raise TerraSatchApiError("Unexpected /api/v1/edge/config response")
         return payload
+
+    def supports_transmitted_results(self) -> bool:
+        try:
+            response = self._request("GET", "/api/v1/edge/command-capabilities")
+            payload = response.json()
+        except TerraSatchApiError as exc:
+            if exc.status_code in {404, 405}:
+                return False
+            raise
+        except ValueError as exc:
+            raise TerraSatchApiError("Invalid command capabilities response") from exc
+        return (isinstance(payload, dict) and payload.get("version") == 1
+                and isinstance(payload.get("result_statuses"), list)
+                and "transmitted" in payload["result_statuses"])
 
     def edge_commands(self, *, limit: int = 50) -> list[EdgeCommand]:
         """Poll work assigned by the API to this exact paired Edge credential."""
@@ -216,8 +245,8 @@ class TerraSatchApiClient:
         status: str,
         detail: str | None = None,
     ) -> EdgeCommand:
-        if status not in {"simulated", "failed"}:
-            raise ValueError("Edge command result must be 'simulated' or 'failed'")
+        if status not in {"simulated", "transmitted", "failed"}:
+            raise ValueError("Edge command result must be 'simulated', 'transmitted' or 'failed'")
         response = self._request(
             "POST",
             f"/api/v1/edge/commands/{command_id}/result",
@@ -239,6 +268,9 @@ class TerraSatchApiClient:
         transcript_model: str | None = None,
         transcript_language: str | None = None,
         transcript_confidence: float | None = None,
+        started_at: str | None = None,
+        ended_at: str | None = None,
+        rf_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         body = {
             "site_id": site_id,
@@ -252,6 +284,9 @@ class TerraSatchApiClient:
             "transcript_model": transcript_model,
             "transcript_language": transcript_language,
             "transcript_confidence": transcript_confidence,
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "rf_metadata": rf_metadata or {},
         }
         response = self._request("POST", "/api/v1/transmissions", json=body)
         payload = response.json()

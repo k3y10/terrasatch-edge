@@ -9,6 +9,8 @@ def test_radio_defaults_are_safe_for_bounded_receive() -> None:
     assert config.radio_channel is None
     assert config.radio_squelch > 0
     assert config.radio_output_sample_rate == 16_000
+    assert config.radio_auto_calibrate is True
+    assert config.radio_release_rms_threshold < config.radio_min_peak_rms
 
 
 def test_radio_env_overrides_load_without_destroying_saved_config(tmp_path, monkeypatch) -> None:
@@ -17,11 +19,19 @@ def test_radio_env_overrides_load_without_destroying_saved_config(tmp_path, monk
     save_config(EdgeConfig(site_id="site-1", speech_model="small.en", radio_channel=3))
     monkeypatch.setenv("TERRASATCH_EDGE_RADIO_CHANNEL", "5")
     monkeypatch.setenv("TERRASATCH_EDGE_RADIO_SQUELCH", "24")
+    monkeypatch.setenv("TERRASATCH_EDGE_RADIO_MAX_SECONDS", "12")
+    monkeypatch.setenv("TERRASATCH_EDGE_RADIO_CALIBRATION_SECONDS", "0.75")
+    monkeypatch.setenv("TERRASATCH_EDGE_RADIO_RELEASE_RMS_THRESHOLD", "90")
+    monkeypatch.setenv("TERRASATCH_EDGE_RADIO_AUTO_CALIBRATE", "false")
     loaded = load_config()
     assert loaded.site_id == "site-1"
     assert loaded.speech_model == "small.en"
     assert loaded.radio_channel == 5
     assert loaded.radio_squelch == 24
+    assert loaded.radio_max_transmission_seconds == 12
+    assert loaded.radio_calibration_seconds == 0.75
+    assert loaded.radio_release_rms_threshold == 90
+    assert loaded.radio_auto_calibrate is False
 
 
 def test_malformed_optional_radio_env_is_ignored(tmp_path, monkeypatch) -> None:

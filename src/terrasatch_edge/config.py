@@ -26,7 +26,11 @@ def _default_state_dir() -> Path:
         base = Path(os.environ.get("PROGRAMDATA", Path.home() / "AppData" / "Local"))
         return base / "TerraSatch" / "Edge" / "state"
     xdg = os.environ.get("XDG_STATE_HOME")
-    return Path(xdg) / "terrasatch-edge" if xdg else Path.home() / ".local" / "state" / "terrasatch-edge"
+    return (
+        Path(xdg) / "terrasatch-edge"
+        if xdg
+        else Path.home() / ".local" / "state" / "terrasatch-edge"
+    )
 
 
 class EdgeConfig(BaseModel):
@@ -45,6 +49,12 @@ class EdgeConfig(BaseModel):
     speech_vad_filter: bool = True
     speech_local_files_only: bool = False
 
+    # Local operator configuration only: never sourced from remote radio policy.
+    radio_tx_enabled: bool = False
+    radio_tx_executable: str | None = None
+    radio_tx_max_seconds: float = Field(default=15, gt=0, le=60)
+    radio_tx_cooldown_seconds: float = Field(default=10, ge=0, le=3600)
+
     # Receive-only BCA/FRS pilot settings. These do not enable SDR transmission.
     radio_profile: str = "bca-frs-na"
     radio_channel: int | None = Field(default=None, ge=1, le=22)
@@ -57,6 +67,19 @@ class EdgeConfig(BaseModel):
     radio_silence_seconds: float = Field(default=0.90, gt=0, le=10)
     radio_min_transmission_seconds: float = Field(default=0.40, gt=0, le=10)
     radio_max_transmission_seconds: float = Field(default=30.0, ge=1, le=300)
+    radio_auto_calibrate: bool = True
+    radio_calibration_seconds: float = Field(default=0.40, gt=0, le=10)
+    radio_min_peak_rms: int = Field(default=180, ge=0, le=32_767)
+    radio_release_rms_threshold: int = Field(default=120, ge=0, le=32_767)
+    radio_vad_enabled: bool = True
+    radio_vad_rms_threshold: int = Field(default=180, ge=0, le=32_767)
+    radio_candidate_queue_max: int = Field(default=32, ge=1, le=1000)
+    radio_outbox_max_items: int = Field(default=1000, ge=1, le=100_000)
+    radio_keep_audio: bool = False
+    radio_qa_enabled: bool = False
+    radio_qa_max_storage_mb: int = Field(default=500, ge=0, le=100_000)
+    radio_qa_max_age_hours: float = Field(default=24, ge=0, le=8760)
+    radio_qa_max_files: int = Field(default=100, ge=0, le=100_000)
 
 
 @dataclass(frozen=True)
@@ -180,10 +203,14 @@ def load_config() -> EdgeConfig:
     for field_name, env_name in (
         ("speech_vad_filter", "TERRASATCH_EDGE_SPEECH_VAD_FILTER"),
         ("speech_local_files_only", "TERRASATCH_EDGE_SPEECH_LOCAL_FILES_ONLY"),
+        ("radio_vad_enabled", "TERRASATCH_EDGE_RADIO_VAD_ENABLED"),
+        ("radio_keep_audio", "TERRASATCH_EDGE_RADIO_KEEP_AUDIO"),
+        ("radio_qa_enabled", "TERRASATCH_EDGE_RADIO_QA_ENABLED"),
+        ("radio_auto_calibrate", "TERRASATCH_EDGE_RADIO_AUTO_CALIBRATE"),
     ):
-        value = _env_bool(env_name)
-        if value is not None:
-            data[field_name] = value
+        bool_value = _env_bool(env_name)
+        if bool_value is not None:
+            data[field_name] = bool_value
 
     int_overrides = {
         "radio_channel": "TERRASATCH_EDGE_RADIO_CHANNEL",
@@ -191,11 +218,18 @@ def load_config() -> EdgeConfig:
         "radio_demod_sample_rate": "TERRASATCH_EDGE_RADIO_DEMOD_SAMPLE_RATE",
         "radio_squelch": "TERRASATCH_EDGE_RADIO_SQUELCH",
         "radio_squelch_delay": "TERRASATCH_EDGE_RADIO_SQUELCH_DELAY",
+        "radio_min_peak_rms": "TERRASATCH_EDGE_RADIO_MIN_PEAK_RMS",
+        "radio_release_rms_threshold": "TERRASATCH_EDGE_RADIO_RELEASE_RMS_THRESHOLD",
+        "radio_vad_rms_threshold": "TERRASATCH_EDGE_RADIO_VAD_RMS_THRESHOLD",
+        "radio_candidate_queue_max": "TERRASATCH_EDGE_RADIO_QUEUE_MAX",
+        "radio_outbox_max_items": "TERRASATCH_EDGE_RADIO_OUTBOX_MAX_ITEMS",
+        "radio_qa_max_storage_mb": "TERRASATCH_EDGE_RADIO_QA_MAX_STORAGE_MB",
+        "radio_qa_max_files": "TERRASATCH_EDGE_RADIO_QA_MAX_FILES",
     }
     for field_name, env_name in int_overrides.items():
-        value = _env_int(env_name)
-        if value is not None:
-            data[field_name] = value
+        int_value = _env_int(env_name)
+        if int_value is not None:
+            data[field_name] = int_value
 
     float_overrides = {
         "radio_gain_db": "TERRASATCH_EDGE_RADIO_GAIN_DB",
@@ -203,11 +237,13 @@ def load_config() -> EdgeConfig:
         "radio_silence_seconds": "TERRASATCH_EDGE_RADIO_SILENCE_SECONDS",
         "radio_min_transmission_seconds": "TERRASATCH_EDGE_RADIO_MIN_SECONDS",
         "radio_max_transmission_seconds": "TERRASATCH_EDGE_RADIO_MAX_SECONDS",
+        "radio_calibration_seconds": "TERRASATCH_EDGE_RADIO_CALIBRATION_SECONDS",
+        "radio_qa_max_age_hours": "TERRASATCH_EDGE_RADIO_QA_MAX_AGE_HOURS",
     }
     for field_name, env_name in float_overrides.items():
-        value = _env_float(env_name)
-        if value is not None:
-            data[field_name] = value
+        float_value = _env_float(env_name)
+        if float_value is not None:
+            data[field_name] = float_value
 
     try:
         return EdgeConfig.model_validate(data)

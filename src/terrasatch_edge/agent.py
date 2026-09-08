@@ -9,6 +9,8 @@ from .api import TerraSatchApiClient, TerraSatchApiError
 from .commands import process_edge_commands
 from .config import EdgeConfig, load_api_key, load_config, save_remote_config
 from .discovery import save_snapshot, scan_hardware
+from .radio_service import read_radio_status
+from .tx_bridge import ExternalRadioTxProvider
 
 
 @dataclass
@@ -47,10 +49,23 @@ class EdgeAgent:
                 return False, f"API unavailable; snapshot saved locally: {exc}"
 
         try:
-            heartbeat = self.client.heartbeat(snapshot)
+            provider = None
+            provider_capabilities = set()
+            if self.config.radio_tx_enabled and self.config.radio_tx_executable:
+                try:
+                    provider = ExternalRadioTxProvider(self.config.radio_tx_executable)
+                    if self.client.supports_transmitted_results():
+                        provider_capabilities = provider.status().reported_capabilities()
+                except Exception:
+                    # RX/heartbeat stays online even if an optional TX bridge is broken.
+                    provider = None
+            heartbeat_options = {"telemetry": {"radio": read_radio_status()}}
+            if provider_capabilities:
+                heartbeat_options["provider_capabilities"] = provider_capabilities
+            heartbeat = self.client.heartbeat(snapshot, **heartbeat_options)
             remote_config = self.client.remote_config()
             save_remote_config(remote_config)
-            command_cycle = process_edge_commands(self.client)
+            command_cycle = process_edge_commands(self.client, config=self.config, remote_config=remote_config, provider=provider)
             device = heartbeat.get("device") if isinstance(heartbeat, dict) else None
             device_name = device.get("name") if isinstance(device, dict) else self.config.node_name
             return (
