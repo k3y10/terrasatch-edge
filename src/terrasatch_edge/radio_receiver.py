@@ -16,7 +16,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import BinaryIO, Callable, Iterator
 
-from .radio_profiles import RadioChannelProfile, bca_frs_channel
+from .radio_targets import RadioTarget, bca_target, validate_rtl_target
+from .radio_lock import ReceiverLock
 from .tooling import find_executable
 
 
@@ -26,7 +27,7 @@ class RadioReceiveError(RuntimeError):
 
 @dataclass(frozen=True)
 class RadioReceiveSettings:
-    channel: int
+    channel: int | None = None
     device_index: int = 0
     output_sample_rate: int = 16_000
     demod_sample_rate: int = 24_000
@@ -39,21 +40,25 @@ class RadioReceiveSettings:
     max_transmission_seconds: float = 30.0
     activity_rms_threshold: int = 180
     release_rms_threshold: int = 120
+    target: RadioTarget | None = None
 
     @property
-    def profile(self) -> RadioChannelProfile:
-        return bca_frs_channel(self.channel)
+    def profile(self) -> RadioTarget:
+        target = self.target or bca_target(self.channel)
+        validate_rtl_target(target)
+        return target
 
 
 @dataclass(frozen=True)
 class RadioAudioCapture:
     path: Path
-    channel: int
+    channel: int | None
     duration_seconds: float
     peak_rms: int
     source_message_id: str
     started_at: datetime
     ended_at: datetime
+    target: RadioTarget | None = None
 
     @property
     def duration_ms(self) -> int:
@@ -178,7 +183,7 @@ def build_rtl_fm_command(
         "-f",
         str(profile.frequency_hz),
         "-s",
-        str(settings.demod_sample_rate),
+        str(profile.bandwidth_hz or (48000 if profile.modulation == "fm" else settings.demod_sample_rate)),
         "-r",
         str(settings.output_sample_rate),
         "-l",
@@ -196,15 +201,25 @@ def build_rtl_fm_command(
     return command
 
 
-def _pump_pcm(stream: BinaryIO, target: queue.Queue[bytes | None], chunk_size: int) -> None:
+def _pump_pcm(stream: BinaryIO, target: queue.Queue[bytes | None], chunk_size: int,
+              done: threading.Event | None = None) -> None:
+    def send(data):
+        while not (done and done.is_set()):
+            try:
+                target.put(data, timeout=0.1)
+                return True
+            except queue.Full:
+                continue
+        return False
     try:
-        while True:
+        while not (done and done.is_set()):
             data = stream.read(chunk_size)
-            if not data:
+            if not data or not send(data):
                 break
-            target.put(data)
+    except (OSError, ValueError):
+        pass
     finally:
-        target.put(None)
+        send(None)
 
 
 def _pump_stderr(stream: BinaryIO, tail: deque[bytes]) -> None:
@@ -237,7 +252,8 @@ def _finalize_capture(
     ended_at = started_at + timedelta(seconds=duration_seconds)
     return RadioAudioCapture(
         path=output_path,
-        channel=settings.channel,
+        channel=settings.profile.channel,
+        target=settings.profile,
         duration_seconds=duration_seconds,
         peak_rms=peak_rms,
         source_message_id=source_message_id,
@@ -278,6 +294,10 @@ class ContinuousRtlReceiver:
             )
 
     def captures(self, stop_event: threading.Event) -> Iterator[RadioAudioCapture]:
+        with ReceiverLock(self.settings.device_index):
+            yield from self._captures(stop_event)
+
+    def _captures(self, stop_event: threading.Event) -> Iterator[RadioAudioCapture]:
         executable = find_executable("rtl_fm")
         if executable is None:
             raise RadioReceiveError(
@@ -300,10 +320,11 @@ class ContinuousRtlReceiver:
         chunk_size = max(2, int(bytes_per_second * self.settings.read_chunk_seconds))
         if chunk_size % 2:
             chunk_size += 1
+        reader_done = threading.Event()
         chunks: queue.Queue[bytes | None] = queue.Queue(maxsize=64)
         reader = threading.Thread(
             target=_pump_pcm,
-            args=(process.stdout, chunks, chunk_size),
+            args=(process.stdout, chunks, chunk_size, reader_done),
             name="terrasatch-rtl-fm-reader",
             daemon=True,
         )
@@ -336,7 +357,7 @@ class ContinuousRtlReceiver:
                     settings=self.settings,
                     peak_rms=segment.peak_rms,
                     source_message_id=(
-                        f"edge-radio-bca-ch{self.settings.channel:02d}-{uuid.uuid4()}"
+                        f"edge-radio-{self.settings.profile.id}-{uuid.uuid4()}"
                     ),
                     started_at=segment.started_at,
                 )
@@ -380,6 +401,7 @@ class ContinuousRtlReceiver:
                 if candidate is not None:
                     yield candidate
         finally:
+            reader_done.set()
             if process.poll() is None:
                 process.terminate()
                 try:
@@ -401,7 +423,7 @@ class ContinuousRtlReceiver:
                 stderr_reader.join(timeout=1)
 
 
-def capture_one_transmission(
+def _capture_one_transmission(
     settings: RadioReceiveSettings,
     *,
     output_path: str | Path,
@@ -439,19 +461,25 @@ def capture_one_transmission(
     if chunk_size % 2:
         chunk_size += 1
 
-    chunks: queue.Queue[bytes | None] = queue.Queue()
+    reader_done = threading.Event()
+    chunks: queue.Queue[bytes | None] = queue.Queue(maxsize=64)
     reader = threading.Thread(
         target=_pump_pcm,
-        args=(process.stdout, chunks, chunk_size),
+        args=(process.stdout, chunks, chunk_size, reader_done),
         name="terrasatch-rtl-fm-reader",
         daemon=True,
     )
     reader.start()
 
+    stderr_tail: deque[bytes] = deque(maxlen=8)
+    stderr_reader = None
+    if process.stderr is not None:
+        stderr_reader = threading.Thread(target=_pump_stderr, args=(process.stderr, stderr_tail), daemon=True)
+        stderr_reader.start()
     started_waiting = time.monotonic()
     gate = PcmActivityGate(settings)
     last_chunk_at: float | None = None
-    source_message_id = f"edge-radio-bca-ch{settings.channel:02d}-{uuid.uuid4()}"
+    source_message_id = f"edge-radio-{settings.profile.id}-{uuid.uuid4()}"
 
     def finish_segment(segment: SegmentedPcm | None) -> RadioAudioCapture | None:
         if segment is None:
@@ -494,10 +522,10 @@ def capture_one_transmission(
                     if capture is not None:
                         return capture
                     started_waiting = time.monotonic()
-                    source_message_id = f"edge-radio-bca-ch{settings.channel:02d}-{uuid.uuid4()}"
+                    source_message_id = f"edge-radio-{settings.profile.id}-{uuid.uuid4()}"
                     continue
                 if not gate.active and process.poll() is not None:
-                    stderr = process.stderr.read() if process.stderr else b""
+                    stderr = b"".join(stderr_tail)
                     detail = stderr.decode("utf-8", errors="replace")[-800:]
                     raise RadioReceiveError(
                         f"rtl_fm exited before audio was received (code {process.returncode})"
@@ -509,7 +537,7 @@ def capture_one_transmission(
                 capture = finish_segment(gate.flush())
                 if capture is not None:
                     return capture
-                stderr = process.stderr.read() if process.stderr else b""
+                stderr = b"".join(stderr_tail)
                 detail = stderr.decode("utf-8", errors="replace")[-800:]
                 raise RadioReceiveError(
                     "rtl_fm stopped before a complete transmission was captured"
@@ -523,11 +551,12 @@ def capture_one_transmission(
             capture = finish_segment(segment)
             if capture is None:
                 started_waiting = time.monotonic()
-                source_message_id = f"edge-radio-bca-ch{settings.channel:02d}-{uuid.uuid4()}"
+                source_message_id = f"edge-radio-{settings.profile.id}-{uuid.uuid4()}"
                 continue
             return capture
 
     finally:
+        reader_done.set()
         if process.poll() is None:
             process.terminate()
             try:
@@ -545,3 +574,12 @@ def capture_one_transmission(
             except OSError:
                 pass
         reader.join(timeout=1)
+        if stderr_reader is not None:
+            stderr_reader.join(timeout=1)
+
+
+def capture_one_transmission(settings: RadioReceiveSettings, *, output_path: str | Path,
+                             wait_timeout_seconds: float | None = None) -> RadioAudioCapture:
+    with ReceiverLock(settings.device_index):
+        return _capture_one_transmission(settings, output_path=output_path,
+                                         wait_timeout_seconds=wait_timeout_seconds)

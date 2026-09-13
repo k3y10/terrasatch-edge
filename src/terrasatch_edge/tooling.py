@@ -79,7 +79,7 @@ def find_executable(name: str) -> Path | None:
     return None
 
 
-def probe_rtl_sdr(
+def _probe_rtl_sdr(
     *,
     frequency_hz: int = 100_000_000,
     sample_rate: int = 240_000,
@@ -175,3 +175,12 @@ def probe_rtl_sdr(
             detail=detail,
             output=combined[-2000:],
         )
+
+
+def probe_rtl_sdr(**kwargs) -> SdrProbeResult:
+    from .radio_lock import ReceiverLock
+    try:
+        with ReceiverLock():
+            return _probe_rtl_sdr(**kwargs)
+    except RuntimeError as exc:
+        return SdrProbeResult(ok=False, executable=find_executable("rtl_sdr"), detail=str(exc))

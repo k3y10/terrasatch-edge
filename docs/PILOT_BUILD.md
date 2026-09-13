@@ -1,6 +1,6 @@
-# TerraSatch Edge v0.2.2 Pilot Build
+# TerraSatch Edge Pilot Build — Windows/Linux RX candidate
 
-## What v0.2.2 changes
+## Control plane and operator setup
 
 TerraSatch Edge uses the production Edge control plane and now adds a UI-first local operator experience without changing the API contract:
 
@@ -190,8 +190,8 @@ Build on the target architecture:
 Result examples:
 
 ```text
-release/terrasatch-edge_0.2.2_amd64.deb
-release/terrasatch-edge_0.2.2_arm64.deb
+release/terrasatch-edge_0.2.4_amd64.deb
+release/terrasatch-edge_0.2.4_arm64.deb
 ```
 
 The package installs a `systemd` service.
@@ -202,14 +202,28 @@ Do not link TerraSatch.com to a source checkout or Python installer.
 
 Publish native release artifacts and their SHA-256 hashes, then expose the validated platform artifacts. For controlled pilots, publish reviewed native artifacts to a TerraSatch-controlled release location and point TerraSatch.com to those assets. Code-sign/notarize as appropriate before broad public distribution.
 
-## Not yet in v0.2.2
+## Remaining pilot limitations
 
-- continuous RTL-SDR IQ capture
-- API-driven channel/frequency provider adapter
-- NFM/FM radio-audio pipeline into TerraListen/Satchy
-- BCA radio audio capture/transcription
-- offline SQLite replay queue
+- simultaneous receiver channelization and digital radio decoding
 - automatic binary updater
-- completed production code signing/notarization across all platforms
+- completed release signing and physical Windows/Linux field validation
 
-The finite IQ readiness probe is intentionally narrower than the continuous radio adapter. It proves that Edge can open and read the receiver before the streaming/demodulation layer is added. The Operator Console does not claim those adapters exist before they are implemented.
+Continuous analog receive, explicit frequency targets, BCA capture/transcription and the
+SQLite outbox are implemented. Their field readiness is tracked in [RX_HARDENING_QA.md](RX_HARDENING_QA.md).
+
+The finite IQ readiness probe verifies that Edge can open and read the receiver. The continuous radio adapter adds demodulation, segmentation and speech ingestion; an IQ readiness check alone does not validate that complete receive pipeline.
+
+
+## Windows/Linux RX hardening candidate
+
+The source branch adds generalized receive targets and an independent radio service.
+Use [RADIO_TARGETS.md](RADIO_TARGETS.md) for exact JSON/CLI examples and
+[NATIVE_BUILDS.md](NATIVE_BUILDS.md) for separate Edge/radio service management.
+
+Before field release, validate on Windows 11 x64 and Debian/Ubuntu amd64/arm64:
+native build, installer/package install, bundled/distro RTL tools, NESDR detection,
+10-second frequency probe, continuous reception, independent radio restart while
+heartbeat continues, reboot startup, API ingest, offline outbox and recovery drain.
+Physically unplug/reconnect the SDR and inspect process cleanup and recovery.
+Do not infer this matrix passed from unit tests or an executable build alone.
+[RX_HARDENING_QA.md](RX_HARDENING_QA.md) records exactly what was exercised.

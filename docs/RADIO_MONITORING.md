@@ -1,9 +1,10 @@
 # Continuous radio monitoring
 
 TerraSatch Edge vNext keeps the RTL-SDR receiver open while separate local workers validate
-audio, transcribe speech, and deliver accepted transmissions. The current release monitors one
-configured BCA/FRS carrier. The worker boundaries and remote configuration can represent more
-receivers and channels, but simultaneous 462/467 MHz channelization is Phase 2 work.
+audio, transcribe speech, and deliver accepted transmissions. The receiver accepts a configured RadioTarget: BCA/FRS, an explicit analog frequency,
+or a repeater output. See [Radio targets](RADIO_TARGETS.md) and
+[optional repeater discovery](REPEATER_DISCOVERY.md). One receiver is active at a time;
+sequential scan is available, while simultaneous channelization remains deferred.
 
 ## Simple demo
 
@@ -63,7 +64,8 @@ LTE, Starlink, or Wi-Fi outages. `radio status` reports queue depth and degraded
 ## Remote configuration
 
 The existing `/api/v1/edge/config` response may include a partial radio section. Local defaults
-remain in effect for omitted values and malformed radio configuration is ignored safely.
+remain in effect for omitted values. Malformed remote radio configuration disables RX
+with a warning; it never changes pairing identity. Restart the radio monitor after changing targets.
 
 ```yaml
 radio:
@@ -102,16 +104,17 @@ current RTL pipeline cannot measure them reliably.
 Install Raspberry Pi OS 64-bit, Python 3.12+, and the distribution `rtl-sdr` package. Add the
 service user to the group that owns the RTL-SDR USB device (commonly `plugdev`), install the
 Nooelec/RTL-SDR udev rules, reconnect the dongle, and confirm `rtl_test` and `rtl_fm` with
-`terrasatch-edge doctor`. BCA/FRS support is receive-only; TerraSatch Edge never transmits.
+`terrasatch-edge doctor`. The Nooelec provider and these monitoring commands are receive-only;
+the separate guarded TX bridge retains its existing approval and provider requirements.
 
-For unattended operation, install `deploy/systemd/terrasatch-radio.service` as a user template,
-then enable the instance for the service account. The command stays in the foreground so systemd
-owns restart and shutdown behavior. Keep the ordinary Edge heartbeat agent enabled separately.
+For a native Debian installation, the package installs the system radio unit. Configure a
+target first, then enable the independent service. The command stays in the foreground so
+systemd owns restart and shutdown. Keep the ordinary Edge heartbeat agent enabled separately.
 
 ```bash
-sudo cp deploy/systemd/terrasatch-radio.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now terrasatch-radio@terrasatch.service
+sudo systemctl enable --now terrasatch-radio.service
 ```
 
-Review the unit's install path and user before enabling it on a field node.
+For a development venv, use `deploy/systemd/user/terrasatch-radio.service` and
+`systemctl --user`. See [native service management](NATIVE_BUILDS.md).

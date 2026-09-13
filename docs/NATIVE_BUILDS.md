@@ -2,7 +2,7 @@
 
 TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
 
-Current development package version: **0.2.2**. The Windows v0.2.2 artifact remains in pilot status until its trusted-signed replacement passes the native release gate.
+Current development package version: **0.2.4**. RX candidate builds remain in pilot status until a trusted-signed Windows artifact and native field installations pass the release gate.
 
 ## Shared API contract
 
@@ -146,3 +146,60 @@ For every new artifact:
 12. Publish that exact URL + SHA-256 on `www.terrasatch.com/downloads`.
 
 Native builds are intentionally manual for the pilot; no GitHub Actions workflow is required.
+
+
+## Independent native radio services
+
+The Debian package installs `terrasatch-radio.service` using `/usr/local/bin/terrasatch-edge`
+and `/etc/terrasatch-edge` / `/var/lib/terrasatch-edge`. The unit has its own recovery
+policy, journal identifier, SIGTERM shutdown and process-group cleanup. It is installed
+without enabling or starting RX. Configure targets and pairing, then:
+
+```bash
+sudo systemctl enable --now terrasatch-radio.service
+sudo systemctl restart terrasatch-radio.service
+sudo journalctl -u terrasatch-radio.service -f
+```
+
+`terrasatch-edge.service` continues heartbeat/inventory independently. Use `systemctl stop`
+for an operator service stop. Package removal stops/disables both services while preserving
+registration. Existing radio enablement survives upgrades; operators should restart radio
+after upgrading the package. Development venv users can install
+`deploy/systemd/user/terrasatch-radio.service` as a user unit and use `systemctl --user`;
+it retains XDG paths and is not shipped as the native system service.
+
+Windows installs `TerraSatchRadioService.exe` (WinSW) with service ID `TerraSatchRadio`,
+separate from `TerraSatchEdge`. The radio wrapper uses the existing ProgramData registration,
+UTF-8 logs in the same state/logs folder, bounded log rotation and `radio stop` for graceful
+shutdown. Its initial SCM start mode is Manual. After configuring a target, an administrator runs:
+
+```powershell
+Set-Service -Name TerraSatchRadio -StartupType Automatic
+Start-Service TerraSatchRadio
+Restart-Service TerraSatchRadio
+Get-Service TerraSatchEdge, TerraSatchRadio
+```
+
+Missing target/pairing fails clearly. Runtime/USB process failures return a nonzero exit
+for supervisor recovery. USB reconnection may permit the next service restart to reopen
+the SDR; automatic hotplug recovery and reboot persistence require physical validation.
+Windows upgrades stop both services before replacing their shared executable and preserve
+an existing radio service start mode. Start the radio service explicitly after an upgrade.
+
+Bundled Windows RTL runtime validation requires `rtl_sdr.exe`, `rtl_fm.exe`, `rtl_test.exe`
+and their matching trusted DLL bundle. The staging script inspects dependencies of every
+shipped utility, including `rtl_fm`'s `libwinpthread-1.dll`. The build launches each required
+tool with `-h` and an isolated PATH before accepting the bundle, so a developer's MSYS2
+installation cannot hide a missing DLL. These checks do not open the receiver. No runtime means no usable radio monitoring;
+a build without that optional bundle remains useful for normal Edge inventory/pairing.
+
+## Raspberry Pi / ARM64 Linux
+
+Use the same ARM64 Debian build and receiver provider. Build on the target architecture;
+no separate Pi implementation or cross-architecture validation is claimed. Install `rtl-sdr`
+(the package recommends it), use the distribution udev rules, and grant the intended
+non-root operator membership in `plugdev` where the distro uses that group. Re-login after
+group changes. Inspect `lsusb`, USB permissions and `rtl_test` before radio setup. Reliable
+USB power and a suitable powered hub matter on field nodes. A DVB kernel driver can claim
+the dongle: use the distro RTL-SDR guidance to resolve `dvb_usb_rtl28xxu` conflicts for a
+dedicated SDR, rather than blindly changing drivers on a shared machine.

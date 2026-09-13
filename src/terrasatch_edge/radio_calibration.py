@@ -19,6 +19,8 @@ from .radio_receiver import (
     pcm_rms,
 )
 from .tooling import find_executable
+from .radio_lock import ReceiverLock
+from .config import get_paths
 
 
 class RadioCalibrationError(RadioReceiveError):
@@ -64,11 +66,12 @@ AUTO_SQUELCH_CANDIDATES: tuple[int, ...] = (30, 40, 50, 60, 70, 80, 90, 100)
 NoiseProbe = Callable[[RadioReceiveSettings], RadioNoiseSample]
 
 
-def probe_radio_noise(
+def _probe_radio_noise(
     settings: RadioReceiveSettings,
     *,
     probe_seconds: float = 0.40,
     startup_grace_seconds: float = 0.30,
+    stop_event: threading.Event | None = None,
 ) -> RadioNoiseSample:
     """Measure PCM RMS even when rtl_fm continuously emits squelched samples."""
 
@@ -94,10 +97,11 @@ def probe_radio_noise(
     chunk_size = max(2, int(bytes_per_second * 0.10))
     if chunk_size % 2:
         chunk_size += 1
+    reader_done = threading.Event()
     chunks: queue.Queue[bytes | None] = queue.Queue(maxsize=64)
     reader = threading.Thread(
         target=_pump_pcm,
-        args=(process.stdout, chunks, chunk_size),
+        args=(process.stdout, chunks, chunk_size, reader_done),
         name="terrasatch-radio-calibration-pcm",
         daemon=True,
     )
@@ -118,7 +122,9 @@ def probe_radio_noise(
     grace_deadline = started + startup_grace_seconds
     deadline = grace_deadline + probe_seconds
     try:
-        while time.monotonic() < deadline:
+        while time.monotonic() < deadline and not (stop_event and stop_event.is_set()):
+            if (get_paths().state_dir / "radio-stop.request").exists():
+                raise RadioCalibrationError("Stop requested during radio probe/calibration")
             remaining = deadline - time.monotonic()
             try:
                 chunk = chunks.get(timeout=max(0.01, min(0.05, remaining)))
@@ -138,6 +144,7 @@ def probe_radio_noise(
             if time.monotonic() >= grace_deadline:
                 levels.append(pcm_rms(chunk))
     finally:
+        reader_done.set()
         if process.poll() is None:
             process.terminate()
             try:
@@ -214,6 +221,8 @@ def auto_calibrate_radio(
         high = len(squelches) - 1
         quiet: tuple[RadioReceiveSettings, RadioNoiseSample] | None = None
         while low <= high:
+            if (get_paths().state_dir / "radio-stop.request").exists():
+                raise RadioCalibrationError("Stop requested during radio calibration")
             middle = (low + high) // 2
             candidate = replace(settings, gain_db=gain, rtl_squelch=squelches[middle])
             sample = probe(candidate)
@@ -255,3 +264,11 @@ def auto_calibrate_radio(
         mode=mode,
         noise_floor_rms=noise_floor,
     )
+
+
+def probe_radio_noise(settings: RadioReceiveSettings, *, probe_seconds: float = 0.40,
+                      startup_grace_seconds: float = 0.30,
+                      stop_event: threading.Event | None = None) -> RadioNoiseSample:
+    with ReceiverLock(settings.device_index):
+        return _probe_radio_noise(settings, probe_seconds=probe_seconds,
+                                  startup_grace_seconds=startup_grace_seconds, stop_event=stop_event)

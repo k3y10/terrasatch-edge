@@ -1,16 +1,24 @@
 [Unit]
-Description=TerraSatch continuous receive-only radio monitor
+Description=TerraSatch receive-only radio monitor
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=%i
-ExecStart=%h/.local/share/terrasatch-edge/venv/bin/terrasatch-edge radio start
+ExecStart=/usr/local/bin/terrasatch-edge radio start
+Environment=TERRASATCH_EDGE_CONFIG_DIR=/etc/terrasatch-edge
+Environment=TERRASATCH_EDGE_STATE_DIR=/var/lib/terrasatch-edge
+Environment=PYTHONUTF8=1
 Restart=on-failure
-RestartSec=5
-Environment=TERRASATCH_EDGE_CONFIG_DIR=%h/.config/terrasatch-edge
-Environment=TERRASATCH_EDGE_STATE_DIR=%h/.local/state/terrasatch-edge
+RestartSec=10
+RestartPreventExitStatus=2
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=45
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=terrasatch-radio
 
 [Install]
 WantedBy=multi-user.target

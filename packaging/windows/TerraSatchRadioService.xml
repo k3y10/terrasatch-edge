@@ -1,0 +1,24 @@
+<service>
+  <id>TerraSatchRadio</id>
+  <name>TerraSatch Radio</name>
+  <description>Independent receive-only radio monitor. Configure a target before enabling automatic startup.</description>
+  <executable>%BASE%\Edge\TerraSatchEdge.exe</executable>
+  <arguments>radio start</arguments>
+  <stopexecutable>%BASE%\Edge\TerraSatchEdge.exe</stopexecutable>
+  <stoparguments>radio stop</stoparguments>
+  <env name="TERRASATCH_EDGE_CONFIG_DIR" value="%ProgramData%\TerraSatch\Edge"/>
+  <env name="TERRASATCH_EDGE_STATE_DIR" value="%ProgramData%\TerraSatch\Edge\state"/>
+  <workingdirectory>%BASE%\Edge</workingdirectory>
+  <env name="PYTHONUTF8" value="1"/>
+  <env name="PYTHONIOENCODING" value="utf-8"/>
+  <startmode>Manual</startmode>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>45 sec</stoptimeout>
+  <logpath>%ProgramData%\TerraSatch\Edge\state\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

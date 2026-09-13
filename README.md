@@ -233,3 +233,24 @@ This repository intentionally does not require GitHub Actions. Pilot build/test 
 ## Channel-aware development QA
 
 See [branch integration, validation results, and remaining bidirectional gates](docs/EDGE_UPDATE_QA.md).
+
+
+## Generalized Windows/Linux receive monitoring
+
+Nooelec NESDR SMArt v5 is receive-only. BCA channel 19 and `--frequency 462.650M`
+resolve into the same continuous receiver/STT/outbox pipeline. Repeater outputs can
+be monitored without transmitting; discovery never grants transmit authorization.
+
+```console
+terrasatch-edge radio devices
+terrasatch-edge radio targets
+terrasatch-edge radio probe --frequency 462.650M --seconds 10
+terrasatch-edge radio start --frequency 462.650M
+terrasatch-edge radio start --channel 19
+```
+
+[Target configuration and scanning](docs/RADIO_TARGETS.md),
+[optional repeater discovery](docs/REPEATER_DISCOVERY.md), and
+[RX validation status](docs/RX_HARDENING_QA.md) describe the current boundaries.
+The independent radio service is installed but must be enabled after configuring a target.
+Windows/Linux are the priority; macOS hardening is deferred.
