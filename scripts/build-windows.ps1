@@ -286,10 +286,17 @@ if ($RtlSdrBundle) {
     if (-not (Test-Path $RtlSdrExe)) {
         throw "TERRASATCH_RTLSDR_BUNDLE must point to a folder containing rtl_sdr.exe."
     }
+    foreach ($RequiredTool in @("rtl_sdr.exe", "rtl_fm.exe", "rtl_test.exe")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $RtlSdrBundle $RequiredTool))) {
+            throw "Incomplete RTL RX runtime: missing $RequiredTool"
+        }
+    }
     $TargetTools = Join-Path $Root "dist\TerraSatchEdge\tools\rtl-sdr"
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $TargetTools
     New-Item -ItemType Directory -Force $TargetTools | Out-Null
     Copy-Item -Path (Join-Path $RtlSdrBundle "*") -Destination $TargetTools -Recurse -Force
+    & $Python (Join-Path $Root "scripts\verify-rtlsdr-runtime.py") $TargetTools
+    if ($LASTEXITCODE -ne 0) { throw "Bundled RTL runtime failed its launch contract." }
     Write-Host "Bundled RTL-SDR runtime from: $RtlSdrBundle" -ForegroundColor Green
 } else {
     Write-Host "No RTL-SDR runtime bundle supplied; PnP detection will work but active IQ probing will remain unavailable." -ForegroundColor Yellow

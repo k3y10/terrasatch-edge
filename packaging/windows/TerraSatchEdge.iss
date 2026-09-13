@@ -47,6 +47,10 @@ Source: "..\windows\TerraSatchEdgeSetup.ps1"; DestDir: "{app}"; Flags: ignorever
 Source: "..\windows\TerraSatchEdgeConsole.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MyIconFile}"; DestDir: "{app}"; DestName: "TerraSatchEdge.ico"; Flags: ignoreversion
 
+Source: "..\windows\vendor\TerraSatchEdgeService.exe"; DestDir: "{app}"; DestName: "TerraSatchRadioService.exe"; Flags: ignoreversion
+Source: "..\windows\TerraSatchRadioService.xml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\windows\TerraSatchRadioServiceSetup.ps1"; DestDir: "{app}"; Flags: ignoreversion
+
 [Icons]
 Name: "{group}\TerraSatch Edge Setup and Console"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command console"; IconFilename: "{app}\TerraSatchEdge.ico"
 Name: "{group}\TerraSatch Edge Status"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command status"; IconFilename: "{app}\TerraSatchEdge.ico"
@@ -56,10 +60,13 @@ Name: "{group}\TerraSatch Edge Advanced Terminal Setup"; Filename: "{sys}\Window
 Name: "{commondesktop}\TerraSatch Edge"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command console"; IconFilename: "{app}\TerraSatchEdge.ico"
 
 [Run]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchRadioServiceSetup.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing radio service..."
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeServiceSetup.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing or updating TerraSatch Edge service..."
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\TerraSatchEdgeConsole.ps1"" -Command console"; Description: "Finish TerraSatch Edge setup"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
+Filename: "{app}\TerraSatchRadioService.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopTerraSatchRadio"
+Filename: "{app}\TerraSatchRadioService.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveTerraSatchRadio"
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated; RunOnceId: "StopTerraSatchEdge"
 Filename: "{app}\TerraSatchEdgeService.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveTerraSatchEdge"
 
@@ -90,6 +97,9 @@ begin
       ewWaitUntilTerminated, ResultCode);
   end;
 
+  WrapperPath := ExpandConstant('{app}\TerraSatchRadioService.exe');
+  if FileExists(WrapperPath) then
+    Exec(WrapperPath, 'stop', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(1000);
 
   { Also close any interactive status/setup process using the same executable.

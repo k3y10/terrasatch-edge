@@ -91,6 +91,8 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 WantedBy=multi-user.target
 UNIT
 
+cp deploy/systemd/terrasatch-radio.service "$UNIT_DIR/terrasatch-radio.service"
+
 cat > "$PKGROOT/DEBIAN/control" <<EOF
 Package: terrasatch-edge
 Version: ${VERSION}
@@ -112,6 +114,8 @@ install -d -m 0700 /var/lib/terrasatch-edge
 install -d -m 0700 /var/lib/terrasatch-edge/logs
 systemctl daemon-reload || true
 systemctl enable terrasatch-edge.service || true
+# Radio unit is installed but operator-enabled after target configuration.
+# Preserve an existing operator enablement across upgrades.
 systemctl restart terrasatch-edge.service || systemctl start terrasatch-edge.service || true
 cat <<'MSG'
 TerraSatch Edge installed.
@@ -123,6 +127,9 @@ Then verify:
   sudo terrasatch-edge status
   sudo terrasatch-edge doctor
 
+Enable configured radio monitoring explicitly:
+  sudo systemctl enable --now terrasatch-radio.service
+
 The service watches the same system registration and will pick up pairing changes without a reinstall.
 MSG
 EOF
@@ -131,6 +138,8 @@ cat > "$PKGROOT/DEBIAN/prerm" <<'EOF'
 #!/bin/sh
 set -e
 if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+  systemctl stop terrasatch-radio.service || true
+  systemctl disable terrasatch-radio.service || true
   systemctl stop terrasatch-edge.service || true
   systemctl disable terrasatch-edge.service || true
 fi

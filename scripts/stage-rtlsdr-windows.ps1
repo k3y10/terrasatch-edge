@@ -39,15 +39,6 @@ $PackageLine = (& $Bash -lc 'pacman -Q mingw-w64-ucrt-x86_64-rtl-sdr').Trim()
 $PackageVersion = ($PackageLine -split '\s+')[-1]
 $UpstreamVersion = ($PackageVersion -split '-')[0]
 
-$LddOutput = & $Bash -lc 'PATH=/ucrt64/bin:/usr/bin ldd /ucrt64/bin/rtl_sdr.exe'
-$DependencyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-foreach ($Line in $LddOutput) {
-    $MatchesFound = [regex]::Matches($Line, '/ucrt64/bin/([^\s]+\.dll)')
-    foreach ($Match in $MatchesFound) {
-        [void]$DependencyNames.Add($Match.Groups[1].Value)
-    }
-}
-
 $Utilities = @(
     "rtl_sdr.exe",
     "rtl_test.exe",
@@ -58,6 +49,20 @@ $Utilities = @(
     "rtl_biast.exe",
     "rtl_adsb.exe"
 )
+
+# Each shipped utility can have different dependencies (rtl_fm needs winpthread).
+$DependencyNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($Utility in $Utilities) {
+    if (-not (Test-Path (Join-Path $UcrtBin $Utility))) { continue }
+    $LddOutput = & $Bash -lc "PATH=/ucrt64/bin:/usr/bin ldd /ucrt64/bin/$Utility"
+    if ($LASTEXITCODE -ne 0) { throw "Dependency inspection failed for $Utility" }
+    foreach ($Line in $LddOutput) {
+        $MatchesFound = [regex]::Matches($Line, '/ucrt64/bin/([^\s]+\.dll)')
+        foreach ($Match in $MatchesFound) {
+            [void]$DependencyNames.Add($Match.Groups[1].Value)
+        }
+    }
+}
 
 New-Item -ItemType Directory -Force $Target | Out-Null
 
@@ -73,6 +78,11 @@ foreach ($Name in $DependencyNames) {
     if (Test-Path $Source) {
         Copy-Item $Source (Join-Path $Target $Name) -Force
     }
+}
+
+$ThreadLicense = Join-Path $MsysRoot "ucrt64\share\licenses\libwinpthread\COPYING"
+if (Test-Path -LiteralPath $ThreadLicense) {
+    Copy-Item -LiteralPath $ThreadLicense -Destination (Join-Path $Target "COPYING.libwinpthread.txt") -Force
 }
 
 $LicenseUrl = "https://raw.githubusercontent.com/osmocom/rtl-sdr/v$UpstreamVersion/COPYING"
