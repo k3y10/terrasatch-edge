@@ -359,7 +359,9 @@ class RadioMonitorService:
     def _capture_path(self) -> Path:
         self.capture_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-        return self.capture_dir / f"{self.target.id}-{stamp}-{uuid.uuid4().hex[:8]}.wav"
+        # Provider IDs may contain ':' (including Windows alternate-stream syntax).
+        # Keep identity in RF metadata, never in a filesystem component.
+        return self.capture_dir / f"radio-{stamp}-{uuid.uuid4().hex[:8]}.wav"
 
     def _log(self, event: str, **fields: Any) -> None:
         logger.info(json.dumps({"event": event, **fields}, default=str, sort_keys=True))

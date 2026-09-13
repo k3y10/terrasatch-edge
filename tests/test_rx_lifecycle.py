@@ -156,3 +156,15 @@ def test_scan_receiver_setup_failure_cleans_up_watcher():
     with pytest.raises(RuntimeError, match="Missing runtime"):
         list(scanner.captures(threading.Event()))
     assert set(threading.enumerate()) <= before
+
+
+def test_provider_identity_never_becomes_windows_capture_filename(tmp_path):
+    target = direct_target("462.650M").model_copy(update={"id": "provider:external-id"})
+    edge = EdgeConfig(site_id="paired", radio={"targets": [target.model_dump()]})
+    service = RadioMonitorService(edge_config=edge, monitor_config=resolve_radio_config(edge).config,
+                                  provider=None, client=None, state_dir=tmp_path)
+    path = service._capture_path()
+    assert ":" not in path.name and "provider" not in path.name
+    assert path.parent == service.capture_dir
+    path.write_bytes(b"audio")
+    assert path.read_bytes() == b"audio"
