@@ -17,6 +17,7 @@ from .api import TerraSatchApiClient, TerraSatchApiError
 from .config import EdgeConfig, get_paths, load_api_key, load_config
 from .ingest import ingest_audio_file
 from .radio_context import radio_source
+from .radio_targets import RadioTarget, bca_target, direct_target, validate_rtl_target
 from .radio_calibration import RadioCalibrationError, RadioCalibrationResult, auto_calibrate_radio
 from .radio_profiles import (
     BCA_FRS_NA_PROFILE,
@@ -34,6 +35,8 @@ from .radio_service import (
 )
 from .speech import FasterWhisperSpeechProvider, SpeechProcessingError, SpeechProviderUnavailable
 
+from .radio_operation import radio_operation
+
 console = Console()
 
 
@@ -41,12 +44,14 @@ def _receive_settings(
     edge_config: EdgeConfig,
     monitor_config: RadioMonitorConfig,
     *,
-    channel: int,
+    channel: int | None = None,
+    target: RadioTarget | None = None,
     device_index: int = 0,
 ) -> RadioReceiveSettings:
     processing = monitor_config.processing
     return RadioReceiveSettings(
         channel=channel,
+        target=target,
         device_index=device_index,
         output_sample_rate=edge_config.radio_output_sample_rate,
         demod_sample_rate=edge_config.radio_demod_sample_rate,
@@ -91,9 +96,16 @@ def register_radio_commands(app: typer.Typer) -> None:
 
     radio_app = typer.Typer(no_args_is_help=True, help="Persistent TerraSatch radio monitor.")
     app.add_typer(radio_app, name="radio")
+    from .radio_tools_cli import register_radio_tools
+    register_radio_tools(radio_app)
 
     @radio_app.command("start")
+    @radio_operation
     def radio_start(
+        scan: Annotated[bool, typer.Option("--scan", hidden=True)] = False,
+        dwell: Annotated[float, typer.Option("--dwell", min=0.5, max=10)] = 2.0,
+        frequency: Annotated[str | None, typer.Option("--frequency", help="Receive frequency in Hz or e.g. 462.650M.")] = None,
+        modulation: Annotated[str, typer.Option("--modulation", help="nfm or fm analog voice.")] = "nfm",
         channel: Annotated[
             int | None,
             typer.Option("--channel", "-c", min=1, max=22, help="BCA/FRS channel 1-22."),
@@ -126,6 +138,17 @@ def register_radio_commands(app: typer.Typer) -> None:
         """Continuously receive while transcription and API delivery run independently."""
 
         edge_config = load_config()
+        if frequency is not None and channel is not None:
+            raise typer.BadParameter("Choose --frequency or --channel, not both")
+        explicit_target = None
+        try:
+            if frequency is not None:
+                explicit_target = direct_target(frequency, modulation)
+                validate_rtl_target(explicit_target)
+            elif channel is not None:
+                explicit_target = bca_target(channel)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
         key = load_api_key()
         if not key:
             console.print("[red]No Edge credential configured. Run `terrasatch-edge setup`.[/red]")
@@ -142,41 +165,40 @@ def register_radio_commands(app: typer.Typer) -> None:
             )
         resolved = load_resolved_radio_config(edge_config)
         monitor_config = resolved.config
+        if scan:
+            monitor_config = monitor_config.model_copy(update={"mode": "scan", "scan_dwell_seconds": dwell})
         if not monitor_config.enabled:
             console.print("[red]Radio monitoring is disabled or remote configuration is invalid.[/red]")
             raise typer.Exit(2)
         receiver = monitor_config.receivers[0]
-        if channel is not None or privacy_code is not None:
-            receiver = receiver.model_copy(
-                update={
-                    "channels": [channel or receiver.channels[0]],
-                    "privacy_code": (
-                        privacy_code if privacy_code is not None else receiver.privacy_code
-                    ),
-                }
-            )
-            monitor_config = monitor_config.model_copy(
-                update={"receivers": [receiver, *monitor_config.receivers[1:]]}
-            )
+        if explicit_target is not None:
+            monitor_config = monitor_config.model_copy(update={"targets": [explicit_target]})
+        if privacy_code is not None:
+            receiver = receiver.model_copy(update={"privacy_code": privacy_code})
+            monitor_config = monitor_config.model_copy(update={"receivers": [receiver]})
         for warning in resolved.warnings:
-            console.print(f"[yellow]! {warning}[/yellow]")
-        if monitor_config.profile != BCA_FRS_NA_PROFILE:
-            console.print(
-                f"[red]Continuous vNext currently supports '{BCA_FRS_NA_PROFILE}', "
-                f"not '{monitor_config.profile}'.[/red]"
-            )
-            raise typer.Exit(2)
+            console.print(warning, markup=False)
+        if explicit_target is None and not monitor_config.targets and edge_config.radio_channel is None:
+            from .config import load_remote_config
+            remote_radio = load_remote_config().get("radio", {})
+            if not (isinstance(remote_radio, dict) and remote_radio.get("receivers")) and not edge_config.radio.get("receivers"):
+                raise typer.BadParameter("Configure a receive target or pass --frequency / --channel")
+        try:
+            target = monitor_config.selected_target()
+            validate_rtl_target(target)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
         calibration: RadioCalibrationResult | None = None
         if auto_calibrate and monitor_config.processing.auto_calibrate:
             console.print(
-                f"[cyan]Calibrating RF environment[/cyan] for channel {receiver.channels[0]}..."
+                f"Calibrating RF environment for {target.frequency_hz} Hz..."
             )
             try:
                 calibration = auto_calibrate_radio(
                     _receive_settings(
                         edge_config,
                         monitor_config,
-                        channel=receiver.channels[0],
+                        target=target,
                         device_index=receiver.device_index,
                     ),
                     fixed_squelch=squelch,
@@ -224,10 +246,10 @@ def register_radio_commands(app: typer.Typer) -> None:
             calibration=calibration,
         )
         logging.basicConfig(level=logging.INFO, format="%(message)s")
-        profile = bca_frs_channel(service.channel)
+        profile = service.target
         console.print("[bold green]TerraSatch Radio Monitor[/bold green]")
         console.print(
-            f"Continuous receive-only monitoring on channel {profile.channel} "
+            f"Continuous receive-only monitoring of {profile.name} "
             f"({profile.frequency_mhz:.4f} MHz). Press Ctrl+C to stop."
         )
         if receiver.privacy_code is not None:
@@ -240,6 +262,12 @@ def register_radio_commands(app: typer.Typer) -> None:
         except (RadioReceiveError, RuntimeError) as exc:
             console.print(f"[red]Radio monitor failed:[/red] {exc}")
             raise typer.Exit(3) from exc
+
+    @radio_app.command("scan")
+    def radio_scan(ctx: typer.Context,
+                   dwell: Annotated[float, typer.Option("--dwell", min=0.5, max=10)] = 2):
+        """Scan configured targets; bounded activity holds use the normal STT/outbox pipeline."""
+        ctx.invoke(radio_start, scan=True, dwell=dwell, auto_calibrate=False)
 
     @radio_app.command("status")
     def radio_status(
@@ -309,6 +337,7 @@ def register_radio_commands(app: typer.Typer) -> None:
         )
 
     @app.command("listen-radio")
+    @radio_operation
     def listen_radio(
         channel: Annotated[
             int | None,
@@ -365,6 +394,9 @@ def register_radio_commands(app: typer.Typer) -> None:
         """Receive BCA radio traffic through Nooelec/RTL-SDR and ingest it into TerraSatch."""
 
         config = load_config()
+        if not load_resolved_radio_config(config).config.enabled:
+            console.print("Radio reception is disabled by policy.")
+            raise typer.Exit(2)
         if config.radio_profile != BCA_FRS_NA_PROFILE:
             console.print(
                 f"[red]Unsupported radio profile '{config.radio_profile}'. "

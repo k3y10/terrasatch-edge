@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .config import EdgeConfig, get_paths, load_remote_config
@@ -24,8 +24,9 @@ from .radio_audio import QaAudioRetention, QaRetentionSettings, has_voice_activi
 from .radio_calibration import RadioCalibrationResult
 from .radio_outbox import RadioOutbox, RadioOutboxFull
 from .radio_profiles import BCA_FRS_NA_PROFILE, bca_frs_channel
+from .radio_targets import RadioTarget, bca_target
+from .radio_lock import ReceiverLock
 from .radio_receiver import (
-    ContinuousRtlReceiver,
     RadioAudioCapture,
     RadioCandidateRejection,
     RadioReceiveSettings,
@@ -37,14 +38,16 @@ logger = logging.getLogger(__name__)
 
 
 class RadioReceiverConfig(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
     name: str = Field(default="primary", min_length=1, max_length=100)
     device_index: int = Field(default=0, ge=0, le=32)
     sdr_serial: str | None = Field(default=None, max_length=255)
-    channels: list[int] = Field(default_factory=list, min_length=1, max_length=22)
+    channels: list[int] = Field(default_factory=list, max_length=22)
     privacy_code: int | None = Field(default=None, ge=0, le=121)
 
 
 class RadioProcessingConfig(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
     min_transmission_seconds: float = Field(default=0.5, gt=0, le=10)
     max_transmission_seconds: float = Field(default=30, ge=1, le=300)
     end_gap_seconds: float = Field(default=0.9, gt=0, le=10)
@@ -69,6 +72,7 @@ class RadioProcessingConfig(BaseModel):
 
 
 class RadioQaConfig(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
     enabled: bool = False
     max_storage_mb: int = Field(default=500, ge=0, le=100_000)
     max_age_hours: float = Field(default=24, ge=0, le=8760)
@@ -82,10 +86,13 @@ class RadioGroupConfig(BaseModel):
 
 
 class RadioMonitorConfig(BaseModel):
-    enabled: bool = True
-    mode: str = Field(default="continuous", pattern="^(continuous|foreground)$")
+    model_config = ConfigDict(allow_inf_nan=False)
+    enabled: bool = Field(default=True, strict=True)
+    mode: str = Field(default="continuous", pattern="^(continuous|foreground|scan)$")
+    scan_dwell_seconds: float = Field(default=2, ge=0.5, le=10)
     profile: str = BCA_FRS_NA_PROFILE
     receivers: list[RadioReceiverConfig] = Field(min_length=1)
+    targets: list[RadioTarget] = Field(default_factory=list, max_length=100)
     processing: RadioProcessingConfig = Field(default_factory=RadioProcessingConfig)
     qa: RadioQaConfig = Field(default_factory=RadioQaConfig)
     groups: dict[str, RadioGroupConfig] = Field(default_factory=dict)
@@ -97,15 +104,33 @@ class RadioMonitorConfig(BaseModel):
         if any(channel not in range(1, 23) or not value.strip()
                for channel, value in self.channel_bindings.items()):
             raise ValueError("Channel bindings require BCA channels 1-22 and nonempty logical IDs")
-        if self.profile != BCA_FRS_NA_PROFILE:
+        if not self.targets and self.profile != BCA_FRS_NA_PROFILE:
             raise ValueError("No implemented receiver provider for this radio profile")
+        for receiver in self.receivers:
+            if any(channel not in range(1, 23) for channel in receiver.channels):
+                raise ValueError("BCA channel must be 1-22")
+        if len({target.id for target in self.targets}) != len(self.targets):
+            raise ValueError("Target IDs must be unique")
         return self
 
-    def channel_id_for(self, channel: int) -> str | None:
+    def selected_target(self) -> RadioTarget:
+        if self.targets:
+            enabled = sorted((target for target in self.targets if target.enabled),
+                             key=lambda target: -target.priority)
+            if not enabled:
+                raise ValueError("No enabled receive target configured")
+            return enabled[0]
+        if self.receivers[0].channels:
+            return bca_target(self.receivers[0].channels[0])
+        raise ValueError("Configure a radio target or pass --frequency / --channel")
+
+    def channel_id_for(self, channel: int | None) -> str | None:
+        if channel is None:
+            return None
         if self.channel_bindings:
             return self.channel_bindings.get(channel)
         # Legacy binding applies only to the configured carrier, never arbitrary captures.
-        if channel == self.receivers[0].channels[0]:
+        if self.receivers[0].channels and channel == self.receivers[0].channels[0]:
             return self.logical_channel_id
         return None
 
@@ -122,12 +147,12 @@ def resolve_radio_config(
 ) -> ResolvedRadioConfig:
     """Safely overlay the existing remote control-plane radio section on defaults."""
 
-    channel = edge_config.radio_channel or 5
+    channel = edge_config.radio_channel
     base: dict[str, Any] = {
         "enabled": True,
         "mode": "continuous",
         "profile": edge_config.radio_profile,
-        "receivers": [{"name": "primary", "device_index": 0, "channels": [channel]}],
+        "receivers": [{"name": "primary", "device_index": 0, "channels": [channel] if channel is not None else []}],
         "processing": {
             "min_transmission_seconds": edge_config.radio_min_transmission_seconds,
             "max_transmission_seconds": edge_config.radio_max_transmission_seconds,
@@ -150,6 +175,16 @@ def resolve_radio_config(
             "max_files": edge_config.radio_qa_max_files,
         },
     }
+    for key in ("enabled", "mode", "scan_dwell_seconds", "profile", "receivers", "targets", "groups", "logical_channel_id", "channel_bindings"):
+        if key in edge_config.radio:
+            base[key] = edge_config.radio[key]
+    for section in ("processing", "qa"):
+        if isinstance(edge_config.radio.get(section), dict):
+            base[section] = {**base[section], **edge_config.radio[section]}
+    try:
+        RadioMonitorConfig.model_validate(base)
+    except ValidationError:
+        base = {"enabled": False, "receivers": [{"channels": [channel] if channel is not None else []}]}
     local_defaults = deepcopy(base)
     warnings: list[str] = []
     radio = (remote_config or {}).get("radio")
@@ -160,15 +195,16 @@ def resolve_radio_config(
     if isinstance(radio, dict):
         if radio.get("receive_enabled") is False:
             base["enabled"] = False
-        for key in ("enabled", "mode", "profile", "receivers", "groups", "logical_channel_id", "channel_bindings"):
+        for key in ("enabled", "mode", "scan_dwell_seconds", "profile", "receivers", "targets", "groups", "logical_channel_id", "channel_bindings"):
             if key in radio:
                 base[key] = radio[key]
         for section in ("processing", "qa"):
             value = radio.get(section)
             if value is not None and not isinstance(value, dict):
                 warnings.append(f"Ignored malformed remote radio.{section}: expected an object")
+                base["enabled"] = False
             elif isinstance(value, dict):
-                base[section] = {**base[section], **value}
+                base[section] = {**base.get(section, {}), **value}
         if "keep_audio" in radio:
             base["processing"] = {**base["processing"], "keep_audio": radio["keep_audio"]}
         # The existing API console stores its binding under radio.ai_channel.
@@ -244,7 +280,8 @@ def _default_receiver_factory(
     min_peak_rms: int,
     on_rejection: Callable[[RadioCandidateRejection], None],
 ) -> CandidateReceiver:
-    return ContinuousRtlReceiver(
+    from .radio_rx_provider import RtlRxProvider
+    return RtlRxProvider().receiver(
         settings,
         capture_path_factory=path_factory,
         min_peak_rms=min_peak_rms,
@@ -302,6 +339,9 @@ class RadioMonitorService:
         self._lock = threading.Lock()
         self._threads: list[threading.Thread] = []
         self._last_rejection_log = 0.0
+        self._receiver_error: Exception | None = None
+        self._active_target: RadioTarget | None = None
+        self._monitor_lease: ReceiverLock | None = None
         self._started_monotonic: float | None = None
 
     @property
@@ -309,13 +349,17 @@ class RadioMonitorService:
         return self.config.receivers[0]
 
     @property
-    def channel(self) -> int:
-        return self.receiver_config.channels[0]
+    def target(self) -> RadioTarget:
+        return self._active_target or self.config.selected_target()
+
+    @property
+    def channel(self) -> int | None:
+        return self.target.channel
 
     def _capture_path(self) -> Path:
         self.capture_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-        return self.capture_dir / f"bca-ch{self.channel:02d}-{stamp}-{uuid.uuid4().hex[:8]}.wav"
+        return self.capture_dir / f"{self.target.id}-{stamp}-{uuid.uuid4().hex[:8]}.wav"
 
     def _log(self, event: str, **fields: Any) -> None:
         logger.info(json.dumps({"event": event, **fields}, default=str, sort_keys=True))
@@ -347,9 +391,12 @@ class RadioMonitorService:
         return {
             **asdict(self.counters),
             "receiver": self.receiver_config.name,
-            "profile": self.config.profile,
+            "profile": self.target.profile,
+            "target_id": self.target.id,
+            "target_name": self.target.name,
+            "modulation": self.target.modulation,
             "channel": self.channel,
-            "frequency_hz": bca_frs_channel(self.channel).frequency_hz,
+            "frequency_hz": self.target.frequency_hz,
             "audio_retention": "QA" if self.qa.settings.enabled else "OFF",
             "calibration_mode": calibration.mode if calibration else "manual",
             "calibration_attempts": calibration.attempts if calibration else 0,
@@ -371,43 +418,57 @@ class RadioMonitorService:
                 "radio.candidate.rejected",
                 receiver=self.receiver_config.name,
                 channel=self.channel,
-                frequency=bca_frs_channel(self.channel).frequency_hz,
+                frequency=self.target.frequency_hz,
                 duration=rejection.duration_seconds,
                 filter_stage="rf_gate",
                 reject_reason=rejection.reason,
             )
         self._update()
 
+    def _scan_state(self, state: str, target: RadioTarget) -> None:
+        self._active_target = target
+        self._update(receiver_state=state)
+        self._log("radio.scan.transition", state=state, target_id=target.id,
+                  frequency_hz=target.frequency_hz)
+
     def _receiver_worker(self) -> None:
-        settings = RadioReceiveSettings(
-            channel=self.channel,
-            device_index=self.receiver_config.device_index,
-            output_sample_rate=self.edge_config.radio_output_sample_rate,
-            demod_sample_rate=self.edge_config.radio_demod_sample_rate,
-            rtl_squelch=self.edge_config.radio_squelch,
-            rtl_squelch_delay=self.edge_config.radio_squelch_delay,
-            gain_db=self.edge_config.radio_gain_db,
-            read_chunk_seconds=self.edge_config.radio_chunk_seconds,
-            end_gap_seconds=self.config.processing.end_gap_seconds,
-            min_transmission_seconds=self.config.processing.min_transmission_seconds,
-            max_transmission_seconds=self.config.processing.max_transmission_seconds,
-            activity_rms_threshold=self.config.processing.min_peak_rms,
-            release_rms_threshold=self.config.processing.release_rms_threshold,
-        )
-        receiver = self.receiver_factory(
-            settings,
-            self._capture_path,
-            self.config.processing.min_peak_rms,
-            self._on_rejection,
-        )
-        self._update(receiver_state="RUNNING")
-        self._log(
-            "radio.receiver.started",
-            receiver=self.receiver_config.name,
-            channel=self.channel,
-            frequency=settings.profile.frequency_hz,
-        )
         try:
+            settings = RadioReceiveSettings(
+                channel=self.channel,
+                target=self.target,
+                device_index=self.receiver_config.device_index,
+                output_sample_rate=self.edge_config.radio_output_sample_rate,
+                demod_sample_rate=self.edge_config.radio_demod_sample_rate,
+                rtl_squelch=self.edge_config.radio_squelch,
+                rtl_squelch_delay=self.edge_config.radio_squelch_delay,
+                gain_db=self.edge_config.radio_gain_db,
+                read_chunk_seconds=self.edge_config.radio_chunk_seconds,
+                end_gap_seconds=self.config.processing.end_gap_seconds,
+                min_transmission_seconds=self.config.processing.min_transmission_seconds,
+                max_transmission_seconds=self.config.processing.max_transmission_seconds,
+                activity_rms_threshold=self.config.processing.min_peak_rms,
+                release_rms_threshold=self.config.processing.release_rms_threshold,
+            )
+            receiver = self.receiver_factory(
+                settings,
+                self._capture_path,
+                self.config.processing.min_peak_rms,
+                self._on_rejection,
+            )
+            if self.config.mode == "scan":
+                from .radio_scanner import ScanningReceiver
+                targets = self.config.targets or [bca_target(c) for c in self.receiver_config.channels]
+                receiver = ScanningReceiver(settings, sorted((t for t in targets if t.enabled), key=lambda t: -t.priority),
+                                            self._capture_path, self._on_rejection,
+                                            dwell=self.config.scan_dwell_seconds,
+                                            on_state=self._scan_state)
+            self._update(receiver_state="RUNNING")
+            self._log(
+                "radio.receiver.started",
+                receiver=self.receiver_config.name,
+                channel=self.channel,
+                frequency=settings.profile.frequency_hz,
+            )
             for capture in receiver.captures(self.stop_event):
                 if self.stop_event.is_set():
                     self.qa.dispose_or_retain(capture.path)
@@ -437,19 +498,20 @@ class RadioMonitorService:
                     )
                 self._update()
         except Exception as exc:
+            self._receiver_error = exc
             self._update(receiver_state="DEGRADED", last_error=str(exc))
             self._log("radio.receiver.failed", error_type=type(exc).__name__, error=str(exc))
             self.stop_event.set()
 
     def _payload_for(self, capture: RadioAudioCapture, transcript: Any) -> dict[str, Any]:
-        profile = bca_frs_channel(capture.channel)
+        profile = capture.target or bca_target(capture.channel)
         privacy_code = self.receiver_config.privacy_code
         return {
             "site_id": self.edge_config.site_id,
             "text": transcript.raw_text,
             "callsign": self.callsign,
             "source_message_id": capture.source_message_id,
-            "source": radio_source(self.edge_config.source, capture.channel),
+            "source": radio_source(self.edge_config.source, capture.channel) if capture.channel is not None else (self.edge_config.source[:40] + "-radio-frequency"),
             "channel_id": self.config.channel_id_for(capture.channel),
             "started_at": capture.started_at.isoformat(),
             "ended_at": capture.ended_at.isoformat(),
@@ -462,12 +524,12 @@ class RadioMonitorService:
                 "receiver_name": self.receiver_config.name,
                 "sdr_index": self.receiver_config.device_index,
                 "sdr_serial": self.receiver_config.sdr_serial,
-                "radio_profile": self.config.profile,
+                **profile.rf_metadata(),
                 "channel": capture.channel,
                 "frequency_hz": profile.frequency_hz,
                 "privacy_code": privacy_code,
                 "privacy_code_source": "configured" if privacy_code is not None else None,
-                "ctcss_hz": None,
+                "ctcss_hz": profile.ctcss_hz,
                 "tone_detected": False,
                 "peak_rms": capture.peak_rms,
                 "signal_dbfs": None,
@@ -594,21 +656,33 @@ class RadioMonitorService:
             raise RuntimeError("Radio monitor is already running")
         if self.stop_event.is_set():
             raise RuntimeError("Create a new monitor instance after stopping")
-        self.stop_request_path.unlink(missing_ok=True)
-        self.qa.enforce_limits()
-        self._started_monotonic = time.monotonic()
-        self._update(
-            receiver_state="STARTING",
-            started_at=datetime.now(UTC).isoformat(),
-            last_error=None,
-        )
-        self._threads = [
-            threading.Thread(target=self._receiver_worker, name="radio-receiver", daemon=True),
-            threading.Thread(target=self._processing_worker, name="radio-processing", daemon=True),
-            threading.Thread(target=self._delivery_worker, name="radio-outbox", daemon=True),
-        ]
-        for thread in self._threads:
-            thread.start()
+        from .radio_targets import validate_rtl_target
+        validate_rtl_target(self.target)
+        self._monitor_lease = ReceiverLock(root=self.state_dir / "radio-locks", name="monitor.lock")
+        self._monitor_lease.__enter__()
+        try:
+            self.stop_request_path.unlink(missing_ok=True)
+            self.qa.enforce_limits()
+            self._started_monotonic = time.monotonic()
+            self._update(
+                receiver_state="STARTING",
+                started_at=datetime.now(UTC).isoformat(),
+                last_error=None,
+            )
+            self._threads = [
+                threading.Thread(target=self._receiver_worker, name="radio-receiver", daemon=True),
+                threading.Thread(target=self._processing_worker, name="radio-processing", daemon=True),
+                threading.Thread(target=self._delivery_worker, name="radio-outbox", daemon=True),
+            ]
+            for thread in self._threads:
+                thread.start()
+        except BaseException:
+            self.stop_event.set()
+            for thread in self._threads:
+                if thread.ident is not None:
+                    thread.join(timeout=10)
+            self._monitor_lease.__exit__(None, None, None)
+            raise
 
     def stop(self, *_args: object) -> None:
         self.stop_event.set()
@@ -623,9 +697,13 @@ class RadioMonitorService:
         finally:
             for thread in self._threads:
                 thread.join(timeout=10)
-            self.stop_request_path.unlink(missing_ok=True)
-            self._update(receiver_state="STOPPED")
-            self._log("radio.receiver.stopped", receiver=self.receiver_config.name)
+            try:
+                self.stop_request_path.unlink(missing_ok=True)
+                self._update(receiver_state="FAILED" if self._receiver_error else "STOPPED")
+                self._log("radio.receiver.stopped", receiver=self.receiver_config.name)
+            finally:
+                if self._monitor_lease is not None:
+                    self._monitor_lease.__exit__(None, None, None)
 
     def run_forever(self, *, install_signal_handlers: bool = True) -> None:
         if install_signal_handlers:
@@ -637,6 +715,8 @@ class RadioMonitorService:
                 pass
         self.start()
         self.wait()
+        if self._receiver_error is not None:
+            raise RuntimeError(f"Radio receiver failed: {self._receiver_error}") from self._receiver_error
 
 
 def load_resolved_radio_config(edge_config: EdgeConfig) -> ResolvedRadioConfig:

@@ -56,6 +56,7 @@ class EdgeConfig(BaseModel):
     radio_tx_cooldown_seconds: float = Field(default=10, ge=0, le=3600)
 
     # Receive-only BCA/FRS pilot settings. These do not enable SDR transmission.
+    radio: dict[str, Any] = Field(default_factory=dict)
     radio_profile: str = "bca-frs-na"
     radio_channel: int | None = Field(default=None, ge=1, le=22)
     radio_output_sample_rate: int = Field(default=16_000, ge=8_000, le=48_000)
@@ -321,8 +322,10 @@ def clear_api_key() -> None:
 def save_remote_config(payload: dict[str, Any]) -> Path:
     path = get_paths().remote_config_file
     _ensure_parent(path)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    _tighten_permissions(path)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _tighten_permissions(temporary)
+    os.replace(temporary, path)
     return path
 
 

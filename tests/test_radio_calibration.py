@@ -4,6 +4,17 @@ from terrasatch_edge.radio_calibration import RadioNoiseSample, auto_calibrate_r
 from terrasatch_edge.radio_receiver import RadioReceiveSettings
 
 
+def test_stop_request_cancels_calibration_before_next_tune(tmp_path, monkeypatch):
+    import pytest
+    from terrasatch_edge.radio_calibration import RadioCalibrationError
+    monkeypatch.setenv("TERRASATCH_EDGE_STATE_DIR", str(tmp_path))
+    (tmp_path / "radio-stop.request").touch()
+    def unexpected_probe(settings):
+        pytest.fail("Calibration must not tune after a stop request")
+    with pytest.raises(RadioCalibrationError, match="Stop requested"):
+        auto_calibrate_radio(RadioReceiveSettings(channel=19), noise_probe=unexpected_probe)
+
+
 def test_calibration_selects_lowest_quiet_squelch_at_preferred_gain() -> None:
     seen: list[tuple[float | None, int]] = []
 

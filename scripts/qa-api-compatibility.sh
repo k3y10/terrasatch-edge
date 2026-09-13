@@ -14,13 +14,13 @@ unset TERRASATCH_EDGE_API_KEY || true
 RESULT_DIR="$(mktemp -d)"
 trap 'rm -rf "$RESULT_DIR"' EXIT
 "$PYTHON_BIN" -c 'import terrasatch, terrasatch_edge; print("API and Edge imported")'
-"$PYTHON_BIN" -m pytest -q "$EDGE_ROOT/compatibility/test_api_edge.py" --junitxml="$RESULT_DIR/joint.xml"
+"$PYTHON_BIN" -m pytest -q "$EDGE_ROOT/compatibility" --junitxml="$RESULT_DIR/joint.xml"
 "$PYTHON_BIN" - "$RESULT_DIR/joint.xml" <<'PY'
 import sys
 from xml.etree import ElementTree
 root = ElementTree.parse(sys.argv[1]).getroot()
 cases = root.findall('.//testcase')
-assert len(cases) == 4
+assert len(cases) == 6
 assert not root.findall('.//failure') and not root.findall('.//error') and not root.findall('.//skipped')
 print(f'PASS: {len(cases)} API/Edge compatibility scenarios')
 PY

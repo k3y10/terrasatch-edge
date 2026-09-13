@@ -217,7 +217,16 @@ def _tool_detected_sdrs() -> list[HardwareDevice]:
     for executable, command, name, identifier in probes:
         if shutil.which(executable) is None:
             continue
-        result = _run(command, timeout=5.0)
+        if executable == "rtl_test":
+            from .radio_lock import ReceiverLock
+            try:
+                with ReceiverLock():
+                    result = _run(command, timeout=5.0)
+            except RuntimeError:
+                # USB/PnP inventory still runs; heartbeat must not interrupt RX.
+                continue
+        else:
+            result = _run(command, timeout=5.0)
         if result is None:
             continue
         combined = (result.stdout + "\n" + result.stderr).strip()
