@@ -1,0 +1,116 @@
+name: Public Edge Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/public-edge-release.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  linux-amd64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Build Linux AMD64 package
+        run: ./scripts/build-linux-deb.sh
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-linux-amd64
+          path: |
+            release/terrasatch-edge_0.2.4_amd64.deb
+          if-no-files-found: error
+
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Stage RTL-SDR runtime
+        shell: powershell
+        run: ./scripts/stage-rtlsdr-windows.ps1
+
+      - name: Build Windows x64 compatibility installer
+        shell: powershell
+        run: ./scripts/build-windows.ps1 -AllowUnsigned
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-windows-x64
+          path: |
+            release/TerraSatch-Edge-Setup-x64.exe
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - linux-amd64
+      - windows-x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Publish v0.2.4 compatibility release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          WINDOWS="release-assets/edge-windows-x64/TerraSatch-Edge-Setup-x64.exe"
+          LINUX="release-assets/edge-linux-amd64/terrasatch-edge_0.2.4_amd64.deb"
+          sha256sum "$WINDOWS" "$LINUX" | tee release-assets/SHA256SUMS.txt
+
+          NOTES="$(cat <<'EOF'
+          TerraSatch Edge v0.2.4 compatibility release for the merged Satchy/API control-plane generation.
+
+          Public downloads:
+          - Windows 10/11 x64 installer (.exe)
+          - Debian/Ubuntu AMD64 package (.deb)
+
+          Notes:
+          - Windows installer is an unsigned compatibility build.
+          - Windows includes the staged RTL-SDR runtime used by the Edge receive path.
+          - Linux recommends the distribution rtl-sdr package.
+          - macOS packages are intentionally not published for this release.
+          - Field-asset mission providers remain disabled unless an explicit provider integration is configured.
+
+          Source: merged main branch.
+          EOF
+          )"
+
+          if gh release view v0.2.4 >/dev/null 2>&1; then
+            gh release upload v0.2.4 "$WINDOWS" "$LINUX" release-assets/SHA256SUMS.txt --clobber
+            gh release edit v0.2.4 --title "TerraSatch Edge v0.2.4" --notes "$NOTES"
+          else
+            gh release create v0.2.4 "$WINDOWS" "$LINUX" release-assets/SHA256SUMS.txt \
+              --target "${GITHUB_SHA}" \
+              --title "TerraSatch Edge v0.2.4" \
+              --notes "$NOTES"
+          fi
