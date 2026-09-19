@@ -12,11 +12,11 @@ permissions:
   contents: read
 
 jobs:
-  qa:
+  edge-qa:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Checkout Edge
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -25,14 +25,54 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install
+      - name: Install Edge
         run: python -m pip install -e ".[dev]"
 
-      - name: Compile
+      - name: Compile Edge
         run: python -m compileall -q src tests
 
-      - name: Ruff
+      - name: Ruff Edge
         run: python -m ruff check src tests
 
-      - name: Tests
+      - name: Test Edge
+        run: python -m pytest -q
+
+  api-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout API feature branch
+        uses: actions/checkout@v4
+        with:
+          repository: k3y10/terrasatch-api-v1
+          ref: feat/satchy-agent-context-missions
+          path: api
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/pyproject.toml
+
+      - name: Install API
+        working-directory: api
+        run: python -m pip install -e ".[dev]"
+
+      - name: Compile API
+        working-directory: api
+        run: python -m compileall -q src tests
+
+      - name: Ruff API
+        working-directory: api
+        run: python -m ruff check src tests
+
+      - name: Alembic single head
+        working-directory: api
+        run: |
+          test "$(python -m alembic heads | wc -l)" -eq 1
+          python -m alembic heads
+
+      - name: Test API
+        working-directory: api
         run: python -m pytest -q
