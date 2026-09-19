@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .api import TerraSatchApiClient, TerraSatchApiError
+from .asset_providers import FieldAssetProvider, provider_capabilities as asset_provider_capabilities
 from .commands import process_edge_commands
 from .config import EdgeConfig, load_api_key, load_config, save_remote_config
 from .discovery import save_snapshot, scan_hardware
@@ -19,11 +20,18 @@ class AgentState:
 
 
 class EdgeAgent:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        asset_providers: dict[str, FieldAssetProvider] | None = None,
+    ) -> None:
         self.config = load_config()
         self.api_key = load_api_key()
         self.client = TerraSatchApiClient(self.config.api_url, self.api_key)
         self.state = AgentState()
+        # Providers are explicit runtime integrations. Merely detecting hardware never
+        # grants a physical capability or permission to execute field missions.
+        self.asset_providers = dict(asset_providers or {})
 
     def stop(self, *_args: object) -> None:
         self.state.running = False
@@ -50,22 +58,43 @@ class EdgeAgent:
 
         try:
             provider = None
-            provider_capabilities = set()
+            provider_capabilities: set[str] = set()
             if self.config.radio_tx_enabled and self.config.radio_tx_executable:
                 try:
                     provider = ExternalRadioTxProvider(self.config.radio_tx_executable)
                     if self.client.supports_transmitted_results():
-                        provider_capabilities = provider.status().reported_capabilities()
+                        provider_capabilities.update(provider.status().reported_capabilities())
                 except Exception:
                     # RX/heartbeat stays online even if an optional TX bridge is broken.
                     provider = None
+
+            active_asset_providers: dict[str, FieldAssetProvider] = {}
+            if self.asset_providers:
+                try:
+                    # Never advertise/execute asset capabilities against an API that cannot
+                    # persist the typed terminal mission-result contract.
+                    if self.client.supports_asset_results():
+                        active_asset_providers = self.asset_providers
+                        provider_capabilities.update(
+                            asset_provider_capabilities(active_asset_providers)
+                        )
+                except Exception:
+                    # Optional field-asset providers must never take receive/heartbeat offline.
+                    active_asset_providers = {}
+
             heartbeat_options = {"telemetry": {"radio": read_radio_status()}}
             if provider_capabilities:
                 heartbeat_options["provider_capabilities"] = provider_capabilities
             heartbeat = self.client.heartbeat(snapshot, **heartbeat_options)
             remote_config = self.client.remote_config()
             save_remote_config(remote_config)
-            command_cycle = process_edge_commands(self.client, config=self.config, remote_config=remote_config, provider=provider)
+            command_cycle = process_edge_commands(
+                self.client,
+                config=self.config,
+                remote_config=remote_config,
+                provider=provider,
+                asset_providers=active_asset_providers,
+            )
             device = heartbeat.get("device") if isinstance(heartbeat, dict) else None
             device_name = device.get("name") if isinstance(device, dict) else self.config.node_name
             return (
