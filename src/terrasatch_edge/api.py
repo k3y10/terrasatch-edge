@@ -245,8 +245,8 @@ class TerraSatchApiClient:
         status: str,
         detail: str | None = None,
     ) -> EdgeCommand:
-        if status not in {"simulated", "transmitted", "failed"}:
-            raise ValueError("Edge command result must be 'simulated', 'transmitted' or 'failed'")
+        if status not in {"simulated", "transmitted", "completed", "aborted", "failed"}:
+            raise ValueError("Unsupported Edge command result status")
         response = self._request(
             "POST",
             f"/api/v1/edge/commands/{command_id}/result",
