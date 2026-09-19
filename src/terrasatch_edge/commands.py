@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from .asset_execution import execute_asset_mission
+from .asset_providers import FieldAssetProvider
 from .config import EdgeConfig
-from .radio_providers import RadioTxProvider, SimulationRadioProvider, rf_execution_blocker
 from .radio_execution import execute_radio_reply
+from .radio_providers import RadioTxProvider, SimulationRadioProvider, rf_execution_blocker
 
 from .api import TerraSatchApiClient, TerraSatchApiError
 from .models import EdgeCommand
@@ -37,12 +39,18 @@ class CommandCycle:
             return f"command polling unavailable: {self.poll_error}"
         simulated = sum(outcome.result == "simulated" for outcome in self.outcomes)
         transmitted = sum(outcome.result == "transmitted" for outcome in self.outcomes)
+        completed = sum(outcome.result == "completed" for outcome in self.outcomes)
+        aborted = sum(outcome.result == "aborted" for outcome in self.outcomes)
         failed = sum(outcome.result == "failed" for outcome in self.outcomes)
         if not self.polled:
             return "no Edge commands pending"
         detail = f"{self.polled} command(s) polled; {simulated} simulated"
         if transmitted:
             detail += f"; {transmitted} transmitted"
+        if completed:
+            detail += f"; {completed} mission(s) completed"
+        if aborted:
+            detail += f"; {aborted} mission(s) aborted"
         if failed:
             detail += f"; {failed} safely rejected"
         if self.errors:
@@ -83,6 +91,7 @@ def process_edge_commands(
     config: EdgeConfig | None = None,
     remote_config: dict | None = None,
     provider: RadioTxProvider | None = None,
+    asset_providers: dict[str, FieldAssetProvider] | None = None,
 ) -> CommandCycle:
     """Poll, ACK, and terminally report device-owned commands one at a time.
 
@@ -122,12 +131,26 @@ def process_edge_commands(
             ):
                 cycle.errors.append(f"{original.id}: ACK returned a different command")
                 continue
-            if command.payload.get("simulate_only") is False and command.command_type == "radio_reply" and config is not None:
+            if (
+                command.payload.get("simulate_only") is False
+                and command.command_type == "radio_reply"
+                and config is not None
+            ):
                 if command.status != "acknowledged":
                     raise ValueError("RF command is not acknowledged")
                 result, detail = execute_radio_reply(
-                    command, client=client, config=config,
-                    remote_config=remote_config or {}, provider=provider,
+                    command,
+                    client=client,
+                    config=config,
+                    remote_config=remote_config or {},
+                    provider=provider,
+                )
+            elif command.command_type == "asset_mission" and config is not None:
+                result, detail = execute_asset_mission(
+                    command,
+                    config=config,
+                    remote_config=remote_config or {},
+                    providers=asset_providers,
                 )
             else:
                 result, detail = _result_for(command)
