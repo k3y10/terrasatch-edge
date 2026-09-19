@@ -1,4 +1,4 @@
-"""Safe API-to-Edge command processing for the simulation-only TX milestone."""
+"""Safe API-to-Edge processing for negotiated radio replies and typed field missions."""
 
 from __future__ import annotations
 

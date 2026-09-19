@@ -3,7 +3,7 @@
 The historical simulation-only milestone below is extended by the
 [current bidirectional provider implementation](RADIO_TX_PROVIDER.md).
 
-TerraSatch Edge v0.2.4 adds the first API-to-Edge outbound control-plane client while preserving the v0.2.3 receive-only radio pilot.
+TerraSatch Edge v0.2.4 provides the API-to-Edge control-plane client while preserving the receive-first radio path. The current Satchy branch also adds a provider-neutral `asset_mission` boundary with capability negotiation, remote policy/binding validation, and durable at-most-once effect claims.
 
 ## Safety boundary
 
@@ -11,7 +11,11 @@ TerraSatch Edge v0.2.4 adds the first API-to-Edge outbound control-plane client 
 - `radio_reply` is accepted only when its payload contains `simulate_only: true`.
 - The handler acknowledges the command and reports `simulated` without opening an SDR, radio, audio, serial, or PTT provider.
 - `radio_tx`, missing/false `simulate_only`, and unknown command types are reported as `failed` without performing an operation.
-- Physical transmission remains a later provider-specific feature and requires separate capability and policy work.
+- Physical RF transmission remains separately capability- and policy-gated.
+- Field-asset missions are disabled unless the API supports the typed terminal result contract, the Edge heartbeat advertises an installed provider capability, and remote asset policy explicitly enables the bound provider.
+- No drone, robot, or relay provider is installed by default in the packaged Edge runtime.
+- The current field-asset provider contract is synchronous: `execute()` must return only when the provider has a terminal outcome. A future asynchronous provider requires a richer mission lifecycle rather than treating acceptance as completion.
+- Mission abort/cancel is not yet an end-to-end physical provider operation; the current branch fails closed rather than claiming an unsupported stop/return-to-base action.
 
 ## Runtime sequence
 

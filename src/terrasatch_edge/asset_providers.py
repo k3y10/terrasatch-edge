@@ -25,7 +25,12 @@ class AssetMission:
 
 
 class FieldAssetProvider(Protocol):
-    """Installed provider capable of executing typed field-asset missions."""
+    """Installed provider capable of executing typed field-asset missions.
+
+    The v1 contract is synchronous: execute() must return only after a terminal
+    mission outcome is known. Adapters that merely dispatch long-running work must
+    not use this contract until a non-terminal mission lifecycle is implemented.
+    """
 
     def reported_capabilities(self) -> frozenset[str]: ...
 
