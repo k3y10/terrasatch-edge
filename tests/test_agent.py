@@ -124,7 +124,7 @@ def test_agent_advertises_and_routes_only_negotiated_asset_providers(monkeypatch
         def execute(self, _mission):
             raise AssertionError("no mission should execute in this test")
 
-    provider = AssetProvider()
+    asset_provider = AssetProvider()
 
     class FakeClient:
         def supports_asset_results(self):
@@ -156,12 +156,12 @@ def test_agent_advertises_and_routes_only_negotiated_asset_providers(monkeypatch
         asset_providers=None,
     ):
         assert isinstance(client, FakeClient)
-        assert asset_providers == {"test-provider": provider}
+        assert asset_providers == {"test-provider": asset_provider}
         events.append("commands")
         return CommandCycle()
 
     monkeypatch.setattr(agent_module, "process_edge_commands", fake_process)
-    agent = EdgeAgent(asset_providers={"test-provider": provider})
+    agent = EdgeAgent(asset_providers={"test-provider": asset_provider})
     agent.client = FakeClient()  # type: ignore[assignment]
 
     ok, _message = agent.tick()
