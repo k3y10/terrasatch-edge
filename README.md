@@ -4,8 +4,9 @@
 
 TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
-> Current source milestone: **v0.2.4 simulation-only Satchy command client + unchanged v0.2.3 BCA/FRS receive pilot**
-> Current public Windows installer: **v0.2.2** while the v0.2.3 Windows artifact completes the signed native release gate.  
+> Current source milestone: **v0.2.4 Satchy command/control runtime + receive-first BCA/FRS monitoring**
+> Field-asset mission support is provider-neutral infrastructure only; no drone, robot, or relay provider is installed by default.
+> Current public Windows installer remains separately release-gated and should only advance after signed clean-machine validation.  
 > Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge) · exact v0.2.3 source snapshot: [`87961ce`](https://github.com/k3y10/terrasatch-edge/commit/87961cea7d2cdd8ad57b8d48b0732f0c694b0c97)
 
 ## Pilot architecture
@@ -48,13 +49,14 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
 - remote Edge configuration retrieval
 - device/site-bound Edge command polling
 - idempotent command acknowledgement and retry after interrupted result delivery
-- simulation-only `radio_reply` completion with explicit refusal of physical RF/PTT work
+- negotiated `radio_reply` handling with existing RF policy/capability safeguards
+- provider-neutral, policy-gated `asset_mission` command support with durable at-most-once effect journaling
 - running services can pick up pairing/config changes without reinstalling
 - local diagnostics and status UI
 - production-style test transmission ingestion through the CLI
 - native packaging for Windows, macOS and Debian/Ubuntu
 
-The v0.2.3 BCA/FRS path remains **receive-only** in v0.2.4. It does not transmit through the SDR. BCA privacy/sub-channel codes do not change the carrier frequency, and the current pilot listens channel-wide rather than filtering CTCSS/DCS codes. The new command client only acknowledges API work and reports `simulated`; it never opens a TX/PTT provider.
+The BCA/FRS path remains **receive-only** through the Nooelec/RTL-SDR receiver. It does not transmit through the SDR. BCA privacy/sub-channel codes do not change the carrier frequency, and the current pilot listens channel-wide rather than filtering CTCSS/DCS codes. RF transmission remains separately capability- and policy-gated. Field-asset missions also remain inert unless an explicit installed provider adapter is wired into the Edge runtime.
 
 See [`docs/SATCHY_COMMAND_CLIENT.md`](docs/SATCHY_COMMAND_CLIENT.md) for the paired API/Edge validation flow and the simulation-only safety boundary.
 
@@ -226,9 +228,9 @@ The v0.2.3 receive pilot can tune a selected BCA/FRS channel, capture a bounded 
 - POSIX system packages keep config/state root-owned and require `sudo` for setup/status/doctor
 - production public Windows installers must pass trusted Authenticode signing and timestamp verification before publication
 
-## No hosted CI required
+## QA
 
-This repository intentionally does not require GitHub Actions. Pilot build/test scripts run locally so they do not add hosted Actions usage.
+The Satchy feature branch uses a focused GitHub Actions gate for Python 3.12 compile, Ruff, and pytest validation. Native Windows/Linux release builds remain separately gated by the platform-specific build and clean-machine validation procedures.
 
 ## Channel-aware development QA
 

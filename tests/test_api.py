@@ -172,3 +172,47 @@ def test_hackrf_discovery_does_not_report_rx_or_tx(monkeypatch):
     assert "hardware:hackrf" in capabilities
     assert "radio:receive" not in capabilities
     assert "radio:transmit" not in capabilities
+
+
+def test_command_result_capabilities_negotiate_radio_and_asset_results(monkeypatch) -> None:
+    def fake_request(method, url, **kwargs):
+        assert method == "GET"
+        assert url.endswith("/api/v1/edge/command-capabilities")
+        return httpx.Response(
+            200,
+            request=httpx.Request(method, url),
+            json={
+                "version": 1,
+                "result_statuses": [
+                    "simulated",
+                    "transmitted",
+                    "completed",
+                    "aborted",
+                    "failed",
+                ],
+            },
+        )
+
+    monkeypatch.setattr(httpx, "request", fake_request)
+    client = TerraSatchApiClient("https://api.example", "paired-device-key")
+
+    assert client.supports_transmitted_results() is True
+    assert client.supports_asset_results() is True
+
+
+def test_asset_result_support_fails_closed_on_legacy_api(monkeypatch) -> None:
+    def fake_request(method, url, **kwargs):
+        return httpx.Response(
+            200,
+            request=httpx.Request(method, url),
+            json={
+                "version": 1,
+                "result_statuses": ["simulated", "transmitted", "failed"],
+            },
+        )
+
+    monkeypatch.setattr(httpx, "request", fake_request)
+    client = TerraSatchApiClient("https://api.example", "paired-device-key")
+
+    assert client.supports_transmitted_results() is True
+    assert client.supports_asset_results() is False
