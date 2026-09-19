@@ -64,8 +64,16 @@ def test_agent_tick_keeps_receive_scan_and_processes_commands_after_sync(monkeyp
     monkeypatch.setattr(agent_module, "save_snapshot", lambda _snapshot: events.append("snapshot"))
     monkeypatch.setattr(agent_module, "save_remote_config", lambda _config: events.append("save_config"))
 
-    def fake_process(client, *, config=None, remote_config=None, provider=None):
+    def fake_process(
+        client,
+        *,
+        config=None,
+        remote_config=None,
+        provider=None,
+        asset_providers=None,
+    ):
         assert isinstance(client, FakeClient)
+        assert asset_providers == {}
         events.append("commands")
         return CommandCycle(
             polled=1,
@@ -88,3 +96,144 @@ def test_agent_tick_keeps_receive_scan_and_processes_commands_after_sync(monkeyp
     assert ok is True
     assert events == ["snapshot", "heartbeat", "config", "save_config", "commands"]
     assert "1 command(s) polled; 1 simulated" in message
+
+
+def test_agent_advertises_and_routes_only_negotiated_asset_providers(monkeypatch) -> None:
+    config = EdgeConfig(
+        api_url="https://api.terrasatch.com",
+        device_id="device-asset",
+        organization_id="org-asset",
+        site_id="site-asset",
+    )
+    snapshot = SystemSnapshot(
+        hostname="edge-asset",
+        platform="test",
+        platform_release="1",
+        architecture="x86_64",
+        python_version="3.12",
+    )
+    events: list[object] = []
+
+    class AssetProvider:
+        def reported_capabilities(self):
+            return frozenset({"camera:capture", "drone:mission"})
+
+        def status(self, _asset_id):
+            raise AssertionError("status is not needed during heartbeat capability reporting")
+
+        def execute(self, _mission):
+            raise AssertionError("no mission should execute in this test")
+
+    provider = AssetProvider()
+
+    class FakeClient:
+        def supports_asset_results(self):
+            events.append("negotiate")
+            return True
+
+        def heartbeat(self, received_snapshot, *, telemetry=None, provider_capabilities=None):
+            assert received_snapshot is snapshot
+            assert provider_capabilities == {"camera:capture", "drone:mission"}
+            events.append(("heartbeat", provider_capabilities))
+            return {"device": {"name": "Edge Asset"}}
+
+        def remote_config(self):
+            events.append("config")
+            return {"assets": {"execution_enabled": True, "bindings": {}}}
+
+    monkeypatch.setattr(agent_module, "load_config", lambda: config)
+    monkeypatch.setattr(agent_module, "load_api_key", lambda: "paired-key")
+    monkeypatch.setattr(agent_module, "scan_hardware", lambda **_kwargs: snapshot)
+    monkeypatch.setattr(agent_module, "save_snapshot", lambda _snapshot: events.append("snapshot"))
+    monkeypatch.setattr(agent_module, "save_remote_config", lambda _config: events.append("save_config"))
+
+    def fake_process(
+        client,
+        *,
+        config=None,
+        remote_config=None,
+        provider=None,
+        asset_providers=None,
+    ):
+        assert isinstance(client, FakeClient)
+        assert asset_providers == {"test-provider": provider}
+        events.append("commands")
+        return CommandCycle()
+
+    monkeypatch.setattr(agent_module, "process_edge_commands", fake_process)
+    agent = EdgeAgent(asset_providers={"test-provider": provider})
+    agent.client = FakeClient()  # type: ignore[assignment]
+
+    ok, _message = agent.tick()
+
+    assert ok is True
+    assert events == [
+        "snapshot",
+        "negotiate",
+        ("heartbeat", {"camera:capture", "drone:mission"}),
+        "config",
+        "save_config",
+        "commands",
+    ]
+
+
+def test_agent_does_not_advertise_assets_to_incompatible_api(monkeypatch) -> None:
+    config = EdgeConfig(
+        api_url="https://api.terrasatch.com",
+        device_id="device-asset",
+        organization_id="org-asset",
+        site_id="site-asset",
+    )
+    snapshot = SystemSnapshot(
+        hostname="edge-asset",
+        platform="test",
+        platform_release="1",
+        architecture="x86_64",
+        python_version="3.12",
+    )
+
+    class AssetProvider:
+        def reported_capabilities(self):
+            return frozenset({"camera:capture"})
+
+        def status(self, _asset_id):
+            raise AssertionError
+
+        def execute(self, _mission):
+            raise AssertionError
+
+    class FakeClient:
+        def supports_asset_results(self):
+            return False
+
+        def heartbeat(self, received_snapshot, *, telemetry=None, provider_capabilities=None):
+            assert received_snapshot is snapshot
+            assert provider_capabilities is None
+            return {"device": {"name": "Edge Asset"}}
+
+        def remote_config(self):
+            return {}
+
+    monkeypatch.setattr(agent_module, "load_config", lambda: config)
+    monkeypatch.setattr(agent_module, "load_api_key", lambda: "paired-key")
+    monkeypatch.setattr(agent_module, "scan_hardware", lambda **_kwargs: snapshot)
+    monkeypatch.setattr(agent_module, "save_snapshot", lambda _snapshot: None)
+    monkeypatch.setattr(agent_module, "save_remote_config", lambda _config: None)
+
+    def fake_process(
+        client,
+        *,
+        config=None,
+        remote_config=None,
+        provider=None,
+        asset_providers=None,
+    ):
+        assert asset_providers == {}
+        return CommandCycle()
+
+    monkeypatch.setattr(agent_module, "process_edge_commands", fake_process)
+    agent = EdgeAgent(asset_providers={"test-provider": AssetProvider()})
+    agent.client = FakeClient()  # type: ignore[assignment]
+
+    ok, _message = agent.tick()
+    assert ok is True
