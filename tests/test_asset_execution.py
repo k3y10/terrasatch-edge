@@ -15,6 +15,9 @@ class Provider:
         self.calls = []
         self.ready = True
 
+    def reported_capabilities(self) -> frozenset[str]:
+        return frozenset({"camera:capture", "drone:mission"})
+
     def status(self, asset_id: str) -> AssetProviderStatus:
         return AssetProviderStatus(
             name="test-provider",
