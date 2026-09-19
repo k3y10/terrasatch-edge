@@ -61,6 +61,13 @@ class EffectJournal:
                 (scope, command.id),
             ).fetchone():
                 return False
+            if db.execute(
+                "SELECT 1 FROM attempts WHERE scope=? AND status='executing'",
+                (scope,),
+            ).fetchone():
+                raise RuntimeError(
+                    "Another physical command is active or uncertain for this asset"
+                )
             db.execute(
                 "INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)",
                 (
