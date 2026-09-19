@@ -207,19 +207,37 @@ class TerraSatchApiClient:
             raise TerraSatchApiError("Unexpected /api/v1/edge/config response")
         return payload
 
-    def supports_transmitted_results(self) -> bool:
+    def command_result_statuses(self) -> set[str]:
+        """Return terminal result statuses supported by the connected API."""
+
         try:
             response = self._request("GET", "/api/v1/edge/command-capabilities")
             payload = response.json()
         except TerraSatchApiError as exc:
             if exc.status_code in {404, 405}:
-                return False
+                return set()
             raise
         except ValueError as exc:
             raise TerraSatchApiError("Invalid command capabilities response") from exc
-        return (isinstance(payload, dict) and payload.get("version") == 1
-                and isinstance(payload.get("result_statuses"), list)
-                and "transmitted" in payload["result_statuses"])
+        if (
+            not isinstance(payload, dict)
+            or payload.get("version") != 1
+            or not isinstance(payload.get("result_statuses"), list)
+        ):
+            return set()
+        return {
+            str(item)
+            for item in payload["result_statuses"]
+            if isinstance(item, str) and item.strip()
+        }
+
+    def supports_transmitted_results(self) -> bool:
+        return "transmitted" in self.command_result_statuses()
+
+    def supports_asset_results(self) -> bool:
+        """Require the full typed terminal contract before enabling physical asset missions."""
+
+        return {"completed", "aborted", "failed"} <= self.command_result_statuses()
 
     def edge_commands(self, *, limit: int = 50) -> list[EdgeCommand]:
         """Poll work assigned by the API to this exact paired Edge credential."""
