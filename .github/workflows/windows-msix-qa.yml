@@ -1,19 +1,8 @@
-name: Windows MSIX QA
+name: Windows MSIX QA (manual only)
 
+# Deliberately manual-only. Release-candidate QA is run locally first so opening or
+# updating a pull request never consumes GitHub Actions minutes.
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/windows-msix-qa.yml"
-      - "packaging/entrypoints/**"
-      - "packaging/windows/msix/**"
-      - "scripts/build-windows-msix.ps1"
-      - "scripts/stage-rtlsdr-windows.ps1"
-      - "scripts/verify-rtlsdr-runtime.py"
-      - "src/**"
-      - "tests/**"
-      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
