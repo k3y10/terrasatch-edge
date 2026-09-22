@@ -1,11 +1,11 @@
 # TerraSatch Edge Windows branding
 
-Windows release builds use **Satchy**, TerraSatch's Sasquatch AI agent, as the application and installer icon.
+Windows release builds use the canonical **TerraSatch production logo** as the application and installer icon. Satchy Approved remains a secondary in-product trust/approval mark.
 
-By default `scripts/build-windows.ps1` uses the reviewed Satchy artwork bundled with Edge:
+By default `scripts/build-windows.ps1` uses the reviewed TerraSatch logo artwork bundled with Edge:
 
 ```text
-src/terrasatch_edge/assets/terrasatch-logo.webp
+src/terrasatch_edge/assets/terrasatch-logo.png
 ```
 
 The build regenerates the ICO on every release build. It uses Pillow to crop the transparent artwork, place it on a square transparent canvas with safe padding, and generate:
@@ -33,7 +33,7 @@ $env:TERRASATCH_SATCHY_ICON_SOURCE = "C:\path\to\satchy.png"
 .\scripts\build-windows.ps1
 ```
 
-Release builds fail if a valid Satchy icon cannot be staged. They do not silently ship a generic Windows/Python icon.
+Release builds fail if a valid TerraSatch icon cannot be staged. They do not silently ship a generic Windows/Python icon.
 
 The generated icon is used for:
 
