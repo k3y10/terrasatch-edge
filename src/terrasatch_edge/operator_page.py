@@ -155,7 +155,8 @@ def render_operator_page(
                 "Voice, notes, photos, GPS, and field observations can sync through the workspace. The phone does not need to be physically attached to this PC.",
                 "Workspace ready" if ready else "Pair workspace first",
                 "good" if ready else "warn",
-                "How mobile connects",
+                "Direct to TerraSatch",
+                "View setup",
             ),
             _connection_card(
                 "radio",
@@ -164,25 +165,28 @@ def render_operator_page(
                 "Connect an SDR, handheld audio interface, or supported radio path to this gateway for local radio capture.",
                 "Detected" if radio_detected else "Not detected",
                 "good" if radio_detected else "warn",
-                "Scan radio hardware",
+                "Through this Edge",
+                "Set up radio",
             ),
             _connection_card(
                 "meshtastic",
                 "Meshtastic / LoRa",
                 "Local or network",
-                "Use a configured local or network adapter to exchange low-bandwidth field messages and location data. Adapter support is separate from the core gateway pairing.",
-                "Detected" if mesh_detected else "Adapter not configured",
+                "Use a local or network adapter for low-bandwidth field messages and location data once the TerraSatch adapter is enabled.",
+                "Detected" if mesh_detected else "Adapter planned",
                 "good" if mesh_detected else "neutral",
-                "Connection details",
+                "Adapter via Edge",
+                "View connection path",
             ),
             _connection_card(
                 "garmin",
                 "Garmin / inReach",
                 "Provider",
                 "Garmin is workspace-managed through its provider integration. It does not need to be plugged into this Edge computer.",
-                "Connect in workspace",
+                "Partner setup",
                 "neutral",
-                "Provider details",
+                "Provider to TerraSatch",
+                "View provider setup",
             ),
             _connection_card(
                 "other",
@@ -191,7 +195,8 @@ def render_operator_page(
                 "Sensors, GPS receivers, serial devices, cameras, and future adapters can attach through the Edge connector layer.",
                 device_label if local_detected else "No local devices",
                 "good" if local_detected else "neutral",
-                "View local devices",
+                "Through this Edge",
+                "Inspect devices",
             ),
         ]
     )
@@ -222,8 +227,18 @@ def render_operator_page(
         <b>→</b>
         <span>2 Connect field inputs</span>
         <b>→</b>
-        <span>3 Test field flow</span>
+        <span>3 Verify the signal path</span>
       </div>
+      <div class="signal-path" aria-label="TerraSatch field signal path">
+        <span class="path-node">Field device</span>
+        <b>→</b>
+        <span class="path-node path-edge">Edge when local</span>
+        <b>→</b>
+        <span class="path-node path-satchy">Satchy</span>
+        <b>→</b>
+        <span class="path-node">TerraSatch intelligence</span>
+      </div>
+      <p class="path-note">Local radios, SDRs, sensors, and supported adapters use this Edge gateway. Mobile and provider integrations may send directly to the same TerraSatch workspace and still become available to Satchy.</p>
       <div class="connection-grid">{connection_cards}</div>
     </section>
     <div class="finish-actions">
@@ -269,13 +284,14 @@ button,input,summary{{font:inherit}}button{{color:inherit}}button:focus-visible,
 .gateway-status{{width:max-content;margin:2px auto 12px;padding:7px 11px;border:1px solid rgba(66,209,123,.32);border-radius:999px;background:rgba(66,209,123,.08);color:#8ce8ae;font-size:.76rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:8px}}.satchy-dot{{width:8px;height:8px;border-radius:50%;background:var(--positive);box-shadow:0 0 14px rgba(66,209,123,.5)}}
 .ready-facts{{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;width:min(100%,760px);margin:28px auto 32px;text-align:left}}.ready-facts div{{padding:15px 4px;border-bottom:1px solid var(--line)}}.ready-facts dt{{color:var(--muted);font-size:.85rem}}.ready-facts dd{{margin:6px 0 0;font-size:1.05rem;font-weight:650;overflow-wrap:anywhere}}.positive{{color:var(--positive)}}
 .connection-center{{margin:18px 0 0;padding:24px;border:1px solid var(--line);border-radius:11px;background:var(--surface3);text-align:left}}.section-head{{display:flex;align-items:end;justify-content:space-between;gap:20px}}.section-head .eyebrow{{margin-bottom:6px}}
-.sequence{{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:17px 0 20px;padding:11px 13px;border:1px solid #303640;border-radius:8px;background:#101216;color:var(--muted);font-size:.8rem}}.sequence b{{color:#58606b}}.sequence-done{{color:#8ce8ae}}
-.connection-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}.connection-card{{min-width:0;padding:17px;border:1px solid #303640;border-radius:9px;background:#191c21;display:flex;flex-direction:column;gap:12px}}.connection-card:hover{{border-color:#414853}}.connection-top{{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}}.connection-card h3{{margin:0;font-size:1rem}}.connection-type{{display:inline-block;margin-top:5px;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}}.connection-card p{{margin:0;color:#aeb5bf;font-size:.84rem;line-height:1.45}}.connection-footer{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto}}.card-action{{padding:0;border:0;background:transparent;color:var(--orange);font-size:.8rem;font-weight:700;cursor:pointer;text-align:right}}.card-action:hover{{color:var(--orange-hover)}}
+.sequence{{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:17px 0 14px;padding:11px 13px;border:1px solid #303640;border-radius:8px;background:#101216;color:var(--muted);font-size:.8rem}}.sequence b{{color:#58606b}}.sequence-done{{color:#8ce8ae}}
+.signal-path{{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;margin:0 0 8px;padding:14px;border:1px solid #343a43;border-radius:9px;background:#111419}}.signal-path b{{color:#5c6470}}.path-node{{padding:7px 10px;border:1px solid #3a4049;border-radius:999px;color:#c9ced5;font-size:.72rem;font-weight:750;letter-spacing:.035em}}.path-edge{{border-color:#6f5321;color:#ffc66b;background:#211a10}}.path-satchy{{border-color:rgba(66,209,123,.32);color:#8ce8ae;background:rgba(66,209,123,.07)}}.path-note{{margin:0 0 20px;color:#929aa5;font-size:.78rem;line-height:1.5;text-align:center}}
+.connection-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}.connection-card{{min-width:0;padding:17px;border:1px solid #303640;border-radius:9px;background:#191c21;display:flex;flex-direction:column;gap:12px}}.connection-card:hover{{border-color:#414853}}.connection-top{{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}}.connection-card h3{{margin:0;font-size:1rem}}.connection-type{{display:inline-block;margin-top:5px;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}}.connection-card p{{margin:0;color:#aeb5bf;font-size:.84rem;line-height:1.45}}.connection-route{{display:flex;align-items:center;gap:7px;color:#858e99;font-size:.72rem}}.connection-route::before{{content:"";width:7px;height:7px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 3px rgba(242,150,13,.08)}}.connection-footer{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto}}.card-action{{padding:0;border:0;background:transparent;color:var(--orange);font-size:.8rem;font-weight:700;cursor:pointer;text-align:right}}.card-action:hover{{color:var(--orange-hover)}}
 .status{{display:inline-flex;align-items:center;min-height:25px;padding:0 9px;border-radius:999px;font-size:.68rem;font-weight:800;white-space:nowrap}}.status-good{{color:#8ce8ae;background:rgba(66,209,123,.1);border:1px solid rgba(66,209,123,.28)}}.status-warn{{color:#ffc96f;background:rgba(242,165,26,.09);border:1px solid rgba(242,165,26,.3)}}.status-neutral{{color:#b4bbc5;background:rgba(154,162,173,.08);border:1px solid rgba(154,162,173,.24)}}.status-bad{{color:#ffaaa6;background:rgba(255,98,92,.08);border:1px solid rgba(255,98,92,.28)}}
 .finish-actions{{margin-top:24px}}.quiet-actions{{display:flex;justify-content:center;gap:42px}}
 .result-panel{{max-width:760px;margin:22px auto 0;text-align:left}}.result-row{{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--soft)}}.result-row:last-child{{border:0}}.result-row b{{color:var(--positive);font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}}.result-row.fail b{{color:var(--red)}}
 .service-note{{margin:auto auto 0;padding-top:14px;color:#858d98;text-align:center;font-size:.88rem}}#notice{{position:fixed;z-index:20;left:50%;top:18px;transform:translateX(-50%);display:none;width:min(calc(100% - 32px),720px);padding:13px 17px;border:1px solid #765415;border-radius:8px;background:#2a2112;box-shadow:0 14px 40px rgba(0,0,0,.35)}}
-dialog{{width:min(calc(100% - 32px),780px);max-height:88vh;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 28px 90px rgba(0,0,0,.7)}}dialog::backdrop{{background:rgba(0,0,0,.76)}}.dialog-head{{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--line);background:var(--surface)}}.dialog-head h2{{margin:0;font-size:1.25rem}}.icon-button{{width:40px;height:40px;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--muted);font-size:1.35rem;cursor:pointer}}.dialog-body{{padding:24px;overflow:auto}}.dialog-intro{{margin:0 0 20px;color:var(--muted);line-height:1.5}}.connection-help{{display:grid;gap:12px}}.connection-help h3{{margin:0}}.connection-help p{{margin:0;color:#bcc2ca;line-height:1.55}}.connection-help .helper-note{{padding:12px 14px;border-left:3px solid var(--orange);background:#191710;color:#d6c6aa}}
+dialog{{width:min(calc(100% - 32px),780px);max-height:88vh;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 28px 90px rgba(0,0,0,.7)}}dialog::backdrop{{background:rgba(0,0,0,.76)}}.dialog-head{{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--line);background:var(--surface)}}.dialog-head h2{{margin:0;font-size:1.25rem}}.icon-button{{width:40px;height:40px;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--muted);font-size:1.35rem;cursor:pointer}}.dialog-body{{padding:24px;overflow:auto}}.dialog-intro{{margin:0 0 20px;color:var(--muted);line-height:1.5}}.connection-help{{display:grid;gap:12px}}.connection-help h3{{margin:0;font-size:1.35rem}}.connection-help p{{margin:0;color:#bcc2ca;line-height:1.55}}.connection-dialog-meta{{display:flex;justify-content:flex-start}}.connection-path-box{{display:grid;gap:6px;padding:13px 14px;border:1px solid #343a43;border-radius:8px;background:#111419}}.connection-path-box span{{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.1em}}.connection-path-box strong{{color:#f1eee7;font-size:.9rem;line-height:1.45}}.connection-steps{{display:grid;gap:9px;margin:2px 0;padding:0;counter-reset:connectstep;list-style:none}}.connection-steps li{{position:relative;padding:11px 12px 11px 42px;border:1px solid #303640;border-radius:8px;background:#181b20;color:#c7ccd3;line-height:1.45}}.connection-steps li::before{{counter-increment:connectstep;content:counter(connectstep);position:absolute;left:12px;top:10px;width:21px;height:21px;display:grid;place-items:center;border:1px solid #6a4e1d;border-radius:50%;color:#ffc66b;font-size:.68rem;font-weight:800}}.connection-result{{padding:11px 13px;border:1px solid rgba(66,209,123,.25);border-radius:8px;background:rgba(66,209,123,.06);color:#9ce7b6!important}}.connection-help .helper-note{{padding:12px 14px;border-left:3px solid var(--orange);background:#191710;color:#d6c6aa}}.dialog-actions{{display:flex;gap:10px;flex-wrap:wrap}}
 .device-list{{list-style:none;margin:0;padding:0}}.device-row{{display:flex;justify-content:space-between;gap:20px;padding:14px 0;border-bottom:1px solid var(--soft)}}.device-row span:first-child{{display:grid;gap:3px}}.device-row small{{color:var(--muted);text-transform:capitalize}}.device-empty{{padding:18px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);line-height:1.5}}
 .form-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}label{{display:block;margin-bottom:6px;color:#c9cdd3;font-size:.82rem}}input{{width:100%;min-height:44px;padding:10px 12px;border:1px solid #3b414a;border-radius:7px;background:#0b0d10;color:var(--text)}}input[readonly]{{color:#858d98}}.form-actions{{margin-top:22px}}.form-actions .primary-action{{margin:0}}
 details{{border-top:1px solid var(--line)}}details:first-of-type{{border-top:0}}summary{{position:relative;padding:16px 2px;cursor:pointer;font-weight:600;list-style:none}}summary::-webkit-details-marker{{display:none}}summary::after{{content:"+";position:absolute;right:4px;color:var(--muted)}}details[open] summary::after{{content:"−"}}.detail-content{{padding:0 2px 18px}}.brand-lockup{{display:grid;grid-template-columns:minmax(92px,148px) minmax(0,1fr);align-items:center;gap:18px;width:min(100%,620px);margin:2px auto 20px}}.brand-lockup-mark{{display:block;width:100%;aspect-ratio:1;object-fit:contain;filter:drop-shadow(0 7px 18px rgba(0,0,0,.32))}}.brand-lockup-copy{{min-width:0;text-align:left;text-transform:uppercase}}.brand-lockup-kicker{{color:var(--orange);font:800 clamp(.58rem,1.6vw,.82rem)/1.15 ui-monospace,Consolas,monospace;letter-spacing:.3em;white-space:nowrap}}.brand-lockup-name{{margin:7px 0 8px;color:var(--text);font:950 clamp(2rem,7.2vw,3.75rem)/.88 var(--display);letter-spacing:-.035em}}.brand-lockup-values{{display:flex;align-items:center;justify-content:space-between;gap:7px;color:var(--text);font:850 clamp(.58rem,1.65vw,.88rem)/1 var(--display);letter-spacing:.1em;white-space:nowrap}}.brand-lockup-values b{{color:var(--orange);font-weight:900}}.id-list{{display:grid;gap:12px}}.id-list div{{display:grid;gap:5px}}.id-list span{{color:var(--muted);font-size:.78rem}}code,pre{{font-family:ui-monospace,Consolas,monospace}}code{{overflow-wrap:anywhere}}pre{{margin:0;padding:14px;border-radius:7px;background:#090b0d;color:#cbd0d6;overflow:auto;font-size:.78rem;line-height:1.55}}table{{width:100%;border-collapse:collapse;font-size:.85rem}}th,td{{padding:10px;text-align:left;border-bottom:1px solid var(--soft)}}th{{color:var(--muted);font-weight:600}}.danger{{min-height:44px;padding:0 16px;border:1px solid #7b3735;border-radius:7px;background:#331918;color:#ffaaa6;cursor:pointer}}.muted{{color:var(--muted)}}
@@ -301,10 +317,20 @@ details{{border-top:1px solid var(--line)}}details:first-of-type{{border-top:0}}
   <div class="dialog-head"><h2 id="connectionTitle">Field connection</h2><button class="icon-button" type="button" aria-label="Close connection help" onclick="closeDialog('connectionDialog')">×</button></div>
   <div class="dialog-body">
     <div class="connection-help">
+      <div class="connection-dialog-meta"><span id="connectionMode" class="status status-neutral"></span></div>
       <h3 id="connectionHeading"></h3>
       <p id="connectionBody"></p>
+      <div class="connection-path-box">
+        <span>Signal path</span>
+        <strong id="connectionPath"></strong>
+      </div>
+      <ol id="connectionSteps" class="connection-steps"></ol>
+      <p id="connectionResult" class="connection-result"></p>
       <p id="connectionNote" class="helper-note"></p>
-      <button id="connectionScan" class="secondary-action" type="button" onclick="scanConnections(this)">Scan local hardware</button>
+      <div class="dialog-actions">
+        <button id="connectionScan" class="secondary-action" type="button" onclick="scanConnections(this)">Scan local hardware</button>
+        <button class="secondary-action" type="button" onclick="closeDialog('connectionDialog');runQuickCheck(document.querySelector('.finish-actions .primary-action'))">Test TerraSatch path</button>
+      </div>
     </div>
   </div>
 </dialog>
@@ -356,32 +382,52 @@ let pairingTimer=null;
 const connectionHelp={{
   mobile:{{
     title:"Phone / TerraSatch Mobile",
-    body:"Phones are companion field devices and can also act as lightweight field inputs on their own. Voice notes, written observations, photos, and GPS can sync through the paired TerraSatch workspace.",
-    note:"No USB or Bluetooth connection to this PC is required for normal workspace sync.",
+    mode:"Workspace companion",
+    body:"A phone can act as a first-class field input without being physically tethered to this computer. Notes, voice transcripts, photos, and GPS observations land in the same paired workspace that this Edge uses.",
+    path:"Phone → TerraSatch workspace → Satchy → shared observations, map, timeline and reports",
+    steps:["Sign in to the same TerraSatch organization on the phone.","Select the same field site assigned to this Edge.","Create a note, voice observation, photo note, or GPS observation.","Confirm the observation appears in the shared workspace and is available to Satchy."],
+    result:"Expected result: phone and Edge observations coexist in the same TerraSatch operational context.",
+    note:"Normal mobile sync is direct to TerraSatch. A future local/offline phone-to-Edge transport can be added without changing the canonical field-input model.",
     scan:false
   }},
   radio:{{
     title:"Radio / SDR",
-    body:"Connect a supported SDR, audio interface, or radio path to this Edge computer. Edge can scan the local machine and report compatible hardware before radio capture is enabled.",
-    note:"Keep the radio startup task off until the intended receiver and target are configured, especially when an older Edge installation is still present.",
+    mode:"Local Edge connection",
+    body:"Radio and SDR hardware are local gateway connections. Edge discovers supported USB, serial, audio, and SDR interfaces, then the radio runtime handles receive/capture using the configured target.",
+    path:"Radio / SDR → this Edge → TerraSatch API → Satchy → radio log and operational events",
+    steps:["Plug the SDR, radio interface, or audio device into this Edge computer.","Run the local hardware scan and confirm the intended device is detected.","Open Gateway settings / radio tooling and select the intended receive path and target.","Keep TerraSatch Radio disabled until the target is configured, then test receive before enabling unattended startup."],
+    result:"Expected result: a field call becomes a TerraSatch transmission/transcript and is available to Satchy.",
+    note:"Do not run the old Edge radio service and the MSIX radio runtime against the same receiver at the same time.",
     scan:true
   }},
   meshtastic:{{
     title:"Meshtastic / LoRa",
-    body:"Meshtastic and LoRa belong in the Edge connector layer as local or network adapters. The gateway can coexist with these paths without making them part of the core pairing requirement.",
-    note:"This screen does not claim a Meshtastic adapter is active unless Edge actually detects or is configured with one.",
+    mode:"Planned Edge adapter",
+    body:"Meshtastic belongs in the Edge connector layer, but the dedicated TerraSatch adapter is not implemented yet. The UI shows the intended local/network path without claiming the integration is already active.",
+    path:"Meshtastic node → Edge adapter (planned) → TerraSatch → Satchy",
+    steps:["Pair the Meshtastic node with its normal phone/USB/network transport.","Enable the future TerraSatch Meshtastic adapter when available.","Map node identity, message/location payloads, and site context into the Edge connector.","Verify a test mesh message appears in the TerraSatch workspace."],
+    result:"Current result: architecture is reserved, but Meshtastic traffic is not yet ingested by Edge.",
+    note:"A generic USB/serial detection is not proof that Meshtastic message ingestion is configured.",
     scan:true
   }},
   garmin:{{
     title:"Garmin / inReach",
-    body:"Garmin is a provider-managed connection. Messages or observations can enter TerraSatch through the workspace integration without the Garmin device being physically plugged into this Edge PC.",
-    note:"Connect and authorize Garmin from the TerraSatch workspace. Edge remains the local gateway for devices that need a nearby computer.",
+    mode:"Provider connection",
+    body:"Garmin inReach uses the TerraSatch provider layer rather than a physical Edge-PC connection. The current API receiver supports Garmin IPC ingestion, while provider access remains partner-gated.",
+    path:"Garmin inReach / Portal Connect → TerraSatch provider endpoint → Satchy → shared workspace",
+    steps:["Obtain/confirm Garmin Portal Connect access for the organization.","Create the Garmin provider connection for the TerraSatch organization/site.","Configure the provider callback/static token and optional device allowlist.","Send a test inReach message or location event and confirm it reaches the shared workspace."],
+    result:"Expected result after provider approval: Garmin field messages enter the same canonical intelligence pipeline as Edge and mobile inputs.",
+    note:"Do not plug the Garmin device into this Edge PC just to make the provider integration work.",
     scan:false
   }},
   other:{{
     title:"Other field devices",
-    body:"GPS receivers, serial devices, sensors, cameras, and future adapters can use the Edge connector layer when a local adapter exists.",
-    note:"Use the hardware scan to see what this computer currently exposes to Edge.",
+    mode:"Local Edge connector",
+    body:"GPS receivers, serial devices, sensors, cameras, and future adapters can use the Edge connector layer when a matching local adapter exists.",
+    path:"Local device → this Edge → adapter/canonical input → TerraSatch → Satchy",
+    steps:["Connect the device by USB, serial, audio, Bluetooth/network bridge, or another supported local interface.","Run the hardware scan and identify the device in Advanced details.","Enable or configure the matching TerraSatch adapter when one exists.","Send a controlled test observation and verify the resulting TerraSatch event."],
+    result:"Expected result: supported device data is normalized into the TerraSatch field-input pipeline.",
+    note:"Detection and permission are separate: seeing hardware does not automatically enable capture, transmit, or device control.",
     scan:true
   }}
 }};
@@ -390,7 +436,7 @@ async function request(path,options={{}}){{const response=await fetch(path,optio
 function busy(button,isBusy,label){{if(!button)return;if(isBusy){{button.dataset.original=button.textContent;button.textContent=label;button.disabled=true}}else{{button.textContent=button.dataset.original||button.textContent;button.disabled=false}}}}
 function openDialog(id){{const dialog=document.getElementById(id);if(dialog&&!dialog.open)dialog.showModal()}}
 function closeDialog(id){{const dialog=document.getElementById(id);if(dialog&&dialog.open)dialog.close()}}
-function openConnection(kind){{const data=connectionHelp[kind];if(!data)return;document.getElementById("connectionHeading").textContent=data.title;document.getElementById("connectionBody").textContent=data.body;document.getElementById("connectionNote").textContent=data.note;document.getElementById("connectionScan").style.display=data.scan?"inline-flex":"none";openDialog("connectionDialog")}}
+function openConnection(kind){{const data=connectionHelp[kind];if(!data)return;document.getElementById("connectionHeading").textContent=data.title;document.getElementById("connectionMode").textContent=data.mode;document.getElementById("connectionBody").textContent=data.body;document.getElementById("connectionPath").textContent=data.path;document.getElementById("connectionResult").textContent=data.result;document.getElementById("connectionNote").textContent=data.note;const steps=document.getElementById("connectionSteps");steps.replaceChildren();data.steps.forEach(step=>{{const item=document.createElement("li");item.textContent=step;steps.appendChild(item)}});document.getElementById("connectionScan").style.display=data.scan?"inline-flex":"none";openDialog("connectionDialog")}}
 async function checkThisPC(button){{busy(button,true,"Checking gateway…");try{{const scan=await request("/api/scan",{{method:"POST",headers}});const current=await request("/api/status");if(current.api_online){{notify("Gateway can reach TerraSatch. "+scan.device_count+" local hardware record(s) found.");window.setTimeout(()=>location.reload(),650)}}else{{notify("This gateway is running, but TerraSatch cannot be reached. Check the internet connection and try again.",true)}}}}catch(error){{notify("Gateway check failed: "+error.message,true)}}finally{{busy(button,false,"")}}}}
 async function scanConnections(button){{busy(button,true,"Scanning…");try{{const scan=await request("/api/scan",{{method:"POST",headers}});notify("Local scan complete. "+scan.device_count+" hardware record(s) found.");window.setTimeout(()=>location.reload(),650)}}catch(error){{notify("Hardware scan failed: "+error.message,true)}}finally{{busy(button,false,"")}}}}
 async function verifyEdge(button){{busy(button,true,"Verifying…");try{{const data=await request("/api/verify",{{method:"POST",headers}});if(data.api_online&&data.authenticated&&data.heartbeat){{notify("Gateway verified. Satchy is ready for field connections.");window.setTimeout(()=>location.reload(),650)}}else{{notify("Verification needs attention: "+(data.error||data.heartbeat_error||"run diagnostics"),true)}}}}catch(error){{notify("Verification failed: "+error.message,true)}}finally{{busy(button,false,"")}}}}
@@ -422,6 +468,7 @@ def _connection_card(
     description: str,
     status: str,
     state: str,
+    route: str,
     action: str,
 ) -> str:
     safe_kind = html.escape(kind, quote=True)
@@ -434,6 +481,7 @@ def _connection_card(
         f'<span class="status status-{html.escape(state)}">{html.escape(status)}</span>'
         "</div>"
         f"<p>{html.escape(description)}</p>"
+        f'<div class="connection-route">{html.escape(route)}</div>'
         '<div class="connection-footer">'
         f'<button class="card-action" type="button" onclick="openConnection(\'{safe_kind}\')">{html.escape(action)}</button>'
         "</div></article>"
