@@ -80,7 +80,7 @@ try {
         ) | Out-Null
         if ($ParseErrors.Count -ne 0) {
             $Details = ($ParseErrors | ForEach-Object { $_.Message }) -join "; "
-            throw "PowerShell parse validation failed for $ScriptPath: $Details"
+            throw "PowerShell parse validation failed for ${ScriptPath}: $Details"
         }
     }
 
