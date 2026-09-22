@@ -45,7 +45,6 @@ $env:TERRASATCH_EDGE_CONFIG_DIR = Join-Path $QaStateRoot "config"
 $env:TERRASATCH_EDGE_STATE_DIR = Join-Path $QaStateRoot "state"
 
 $Cert = $null
-$TrustedCopy = $null
 
 function Resolve-SignTool {
     $Command = Get-Command signtool.exe -ErrorAction SilentlyContinue
@@ -112,10 +111,6 @@ try {
         -NotAfter (Get-Date).AddDays(2)
 
     Export-Certificate -Cert $Cert -FilePath $CertificatePath | Out-Null
-    $TrustedCopy = Import-Certificate `
-        -FilePath $CertificatePath `
-        -CertStoreLocation "Cert:\CurrentUser\TrustedPeople"
-
     $env:TERRASATCH_MSIX_CERT_THUMBPRINT = $Cert.Thumbprint
 
     Write-Host "[5/8] Building development-signed MSIX and running repository tests" -ForegroundColor Cyan
@@ -170,9 +165,19 @@ try {
 
     Write-Host "[8/8] Verifying exact package signature and SHA-256" -ForegroundColor Cyan
     if (-not (Test-Path -LiteralPath $Artifact)) { throw "Expected MSIX was not created: $Artifact" }
-    $SignTool = Resolve-SignTool
-    & $SignTool verify /pa /v $Artifact
-    if ($LASTEXITCODE -ne 0) { throw "MSIX signature verification failed." }
+    $Signature = Get-AuthenticodeSignature -LiteralPath $Artifact
+    if (-not $Signature.SignerCertificate) {
+        throw "MSIX does not expose an Authenticode signer certificate."
+    }
+    $ExpectedThumbprint = ($Cert.Thumbprint -replace "\s", "").ToUpperInvariant()
+    $ActualThumbprint = ($Signature.SignerCertificate.Thumbprint -replace "\s", "").ToUpperInvariant()
+    if ($ActualThumbprint -ne $ExpectedThumbprint) {
+        throw "MSIX signer thumbprint does not match the local QA certificate."
+    }
+    if ($Signature.Status.ToString() -notin @("Valid", "UnknownError")) {
+        throw "MSIX signature integrity inspection failed: $($Signature.Status) $($Signature.StatusMessage)"
+    }
+    Write-Host "Signature signer/integrity check passed; machine trust is deferred to -Install QA." -ForegroundColor Yellow
 
     $Hash = Get-FileHash -LiteralPath $Artifact -Algorithm SHA256
     Write-Host ""
@@ -209,9 +214,6 @@ finally {
     Remove-Item -LiteralPath $QaStateRoot -Recurse -Force -ErrorAction SilentlyContinue
 
     if (-not $KeepCertificate) {
-        if ($TrustedCopy) {
-            Remove-Item -LiteralPath ("Cert:\CurrentUser\TrustedPeople\" + $TrustedCopy.Thumbprint) -Force -ErrorAction SilentlyContinue
-        }
         if ($Cert) {
             Remove-Item -LiteralPath ("Cert:\CurrentUser\My\" + $Cert.Thumbprint) -Force -ErrorAction SilentlyContinue
         }
