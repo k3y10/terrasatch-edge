@@ -2,7 +2,7 @@
 
 TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
 
-Current development package version: **0.2.5**. The primary no-cost public Windows path is Microsoft Store MSIX. Direct `.exe` builds remain beta/compatibility artifacts unless separately trusted-signed.
+Current development package version: **0.2.8**. The primary no-cost public Windows path is Microsoft Store MSIX. Direct `.exe` builds remain beta/compatibility artifacts unless separately trusted-signed.
 
 ## Current TerraSatch connection surface
 
@@ -71,8 +71,10 @@ The development package defaults to:
 ```text
 Identity Name: TerraSatch.Edge.Dev
 Publisher: CN=TerraSatch Inc.
-Artifact: release\TerraSatch-Edge_0.2.5_x64.msix
+Artifact: release\TerraSatch-Edge_0.2.8_x64.msix
 ```
+
+The runtime/file version remains TerraSatch SemVer. The MSIX manifest package version intentionally adds 1 to the SemVer major component so Microsoft Store requirements are satisfied while update ordering stays monotonic (for example, Edge `0.2.8` uses MSIX package version `1.2.8.0`). The fourth Store component remains `0`.
 
 The manifest Publisher must exactly match the subject of the certificate used for a local test package.
 
@@ -80,7 +82,7 @@ To test installation of a CI/local development package:
 
 ```powershell
 .\scripts\install-windows-msix-dev.ps1 `
-  -MsixPath ".\release\TerraSatch-Edge_0.2.5_x64.msix" `
+  -MsixPath ".\release\TerraSatch-Edge_0.2.8_x64.msix" `
   -CertificatePath ".\release\TerraSatch-MSIX-Dev.cer"
 ```
 
@@ -115,8 +117,8 @@ The build runs the Python test suite, creates a PyInstaller runtime, installs a 
 Expected artifact names:
 
 ```text
-release/terrasatch-edge_0.2.5_amd64.deb
-release/terrasatch-edge_0.2.5_arm64.deb
+release/terrasatch-edge_0.2.8_amd64.deb
+release/terrasatch-edge_0.2.8_arm64.deb
 ```
 
 The package uses shared system paths so the CLI and background service see the same registration:
@@ -160,8 +162,8 @@ Supported public pilot architectures:
 Expected artifact names:
 
 ```text
-release/TerraSatch-Edge-0.2.5-macOS-arm64.pkg
-release/TerraSatch-Edge-0.2.5-macOS-x64.pkg
+release/TerraSatch-Edge-0.2.8-macOS-arm64.pkg
+release/TerraSatch-Edge-0.2.8-macOS-x64.pkg
 ```
 
 The package installs a `LaunchDaemon` (`com.terrasatch.edge`) and uses shared system state under:
