@@ -82,9 +82,40 @@ if ($LASTEXITCODE -ne 0) { throw "MSIX build dependency installation failed with
 $IconFile = Join-Path $Root "packaging\windows\assets\TerraSatchEdge.ico"
 $LogoSource = Join-Path $Root "src\terrasatch_edge\assets\terrasatch-logo.webp"
 $ManifestTemplate = Join-Path $Root "packaging\windows\msix\AppxManifest.template.xml"
-foreach ($RequiredPath in @($IconFile, $LogoSource, $ManifestTemplate)) {
+foreach ($RequiredPath in @($LogoSource, $ManifestTemplate)) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) { throw "MSIX prerequisite missing: $RequiredPath" }
 }
+
+if (-not (Test-Path -LiteralPath $IconFile)) {
+    Write-Host "Generating TerraSatch MSIX icon from Satchy artwork" -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force (Split-Path -Parent $IconFile) | Out-Null
+    $IconScript = Join-Path $env:TEMP "terrasatch-msix-icon.py"
+    $IconPython = @'
+from pathlib import Path
+import sys
+from PIL import Image
+
+source = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+image = Image.open(source).convert("RGBA")
+alpha = image.getchannel("A")
+bbox = alpha.getbbox()
+if bbox:
+    image = image.crop(bbox)
+canvas = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+image.thumbnail((840, 840), Image.Resampling.LANCZOS)
+canvas.alpha_composite(image, ((1024 - image.width) // 2, (1024 - image.height) // 2))
+canvas.save(destination, format="ICO", sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+'@
+    Set-Content -LiteralPath $IconScript -Value $IconPython -Encoding UTF8
+    try {
+        & $Python $IconScript $LogoSource $IconFile
+        if ($LASTEXITCODE -ne 0) { throw "MSIX icon generation failed with exit code $LASTEXITCODE." }
+    } finally {
+        Remove-Item -LiteralPath $IconScript -Force -ErrorAction SilentlyContinue
+    }
+}
+if (-not (Test-Path -LiteralPath $IconFile)) { throw "MSIX icon generation did not create $IconFile." }
 
 Write-Host "[1/8] Running Edge tests" -ForegroundColor Cyan
 $PytestBaseTemp = Join-Path $Root ".pytest-tmp-msix"
