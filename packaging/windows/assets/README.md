@@ -25,10 +25,10 @@ $env:TERRASATCH_EDGE_ICON = "C:\path\to\TerraSatchEdge.ico"
 .\scripts\build-windows.ps1
 ```
 
-To generate the ICO from another approved local image or public image URL:
+To generate the ICO from another approved TerraSatch brand image or public image URL:
 
 ```powershell
-$env:TERRASATCH_SATCHY_ICON_SOURCE = "C:\path\to\satchy.png"
+$env:TERRASATCH_BRAND_ICON_SOURCE = "C:\path\to\terrasatch-logo.png"
 # or a public https:// URL
 .\scripts\build-windows.ps1
 ```
@@ -47,3 +47,8 @@ The generated icon is used for:
 - the desktop TerraSatch Edge shortcut
 
 The desktop shortcut is recreated on install/upgrade so existing pilot machines pick up the current Satchy branding.
+
+
+For backward compatibility, `TERRASATCH_SATCHY_ICON_SOURCE` is still accepted if
+`TERRASATCH_BRAND_ICON_SOURCE` is not set. New release configuration should use the
+brand-specific variable above.
