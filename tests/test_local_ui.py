@@ -192,6 +192,15 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "Radio / SDR" in response.text
     assert "Meshtastic / LoRa" in response.text
     assert "Garmin / inReach" in response.text
+    assert "Field device" in response.text
+    assert "Edge when local" in response.text
+    assert "TerraSatch intelligence" in response.text
+    assert "Through this Edge" in response.text
+    assert "Direct to TerraSatch" in response.text
+    assert "Adapter planned" in response.text
+    assert "Partner setup" in response.text
+    assert "Signal path" in response.text
+    assert "Test TerraSatch path" in response.text
     assert 'src="/assets/terrasatch-logo.webp"' in response.text
     assert "brand-lockup-values" in response.text
     assert "Field Intelligence" in response.text
