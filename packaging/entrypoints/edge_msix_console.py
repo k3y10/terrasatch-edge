@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-import os
-
-from terrasatch_edge.entrypoint import main
-
-from msix_common import configure_store_user_state
+from msix_common import run_packaged_edge
 
 
 if __name__ == "__main__":
-    configure_store_user_state()
-    os.environ.setdefault("TERRASATCH_EDGE_WINDOWS_CONSOLE", "1")
-    main(["console"])
+    raise SystemExit(run_packaged_edge(["console"], console=True))
