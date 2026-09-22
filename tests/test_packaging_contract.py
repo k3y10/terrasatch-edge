@@ -125,4 +125,11 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "Meshtastic / LoRa" in operator_page
     assert "Garmin / inReach" in operator_page
     assert "does not need to be plugged into this Edge computer" in operator_page
+    assert "Direct to TerraSatch" in operator_page
+    assert "Through this Edge" in operator_page
+    assert "Adapter planned" in operator_page
+    assert "Provider to TerraSatch" in operator_page
+    assert "Edge when local" in operator_page
+    assert "Signal path" in operator_page
+    assert "Current result: architecture is reserved" in operator_page
     assert "Scan local hardware" in operator_page
