@@ -6,7 +6,7 @@ TerraSatch Edge runs on the field computer and connects physical hardware to `ht
 
 > Current source milestone: **v0.2.5 release-trust + Satchy command/control runtime + receive-first BCA/FRS monitoring**
 > Field-asset mission support is provider-neutral infrastructure only; no drone, robot, or relay provider is installed by default.
-> The existing v0.2.4 Windows installer remains an unsigned beta compatibility build. v0.2.5 is release-gated for SHA-256, GitHub build provenance, and Authenticode signing when the TerraSatch signing certificate is configured.  
+> The existing v0.2.4 Windows installer remains an unsigned beta compatibility build. For v0.2.5, the primary no-cost public Windows route is Microsoft Store MSIX; direct `.exe` distribution remains a compatibility/beta lane unless it is separately trusted-signed.  
 > Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge)
 
 ## Current TerraSatch connection surface
@@ -180,22 +180,31 @@ temporary audio unless bounded QA retention is explicitly enabled.
 
 See [`docs/NATIVE_BUILDS.md`](docs/NATIVE_BUILDS.md) for the current macOS/Linux build, service, signing and clean-machine validation flow. Windows-specific details remain in [`docs/PILOT_BUILD.md`](docs/PILOT_BUILD.md).
 
-Windows:
+Windows — primary free Store/MSIX route:
 
 ```powershell
-$env:TERRASATCH_CODESIGN_CERT_THUMBPRINT = "<CA-issued code-signing certificate thumbprint>"
-.\scripts\build-windows.ps1
+# Local development package using an installed TerraSatch test certificate.
+$env:TERRASATCH_MSIX_CERT_THUMBPRINT = "<development certificate thumbprint>"
+.\scripts\build-windows-msix.ps1
+
+# Partner Center submission package after reserving the Store product identity.
+$env:TERRASATCH_MSIX_IDENTITY_NAME = "<Partner Center Package/Identity/Name>"
+$env:TERRASATCH_MSIX_PUBLISHER = "<Partner Center Package/Identity/Publisher>"
+$env:TERRASATCH_MSIX_PUBLISHER_DISPLAY_NAME = "TerraSatch Inc."
+.\scripts\build-windows-msix.ps1 -StoreUpload
 ```
 
-The production build signs and verifies the native Edge executable, service wrapper, installer, and uninstaller with SHA-256 plus an RFC 3161 timestamp. The certificate must be installed with its private key in the current-user or local-machine Personal certificate store. Use `.\scripts\build-windows.ps1 -AllowUnsigned` only for local QA; that artifact must not be uploaded or published.
+The MSIX contains the TerraSatch operator launcher plus packaged `TerraSatchEdge` and `TerraSatchRadio` Windows services. Local development MSIX files are signed with a local test certificate so they can be installed on a controlled machine. The Partner Center submission package is intentionally unsigned locally; Microsoft Store applies the production package signature after certification.
 
-The build produces:
+The free Store path preserves TerraSatch's proprietary license and avoids placing a private production signing key in GitHub. The manifest requests the restricted `packagedServices` capability, so Store certification must approve that capability before public distribution.
 
-```text
-release\TerraSatch-Edge-Setup-x64.exe
+The existing Inno Setup compatibility build remains available for controlled beta/direct-download testing:
+
+```powershell
+.\scripts\build-windows.ps1 -AllowUnsigned
 ```
 
-The installer is UI-first: the desktop/Start Menu TerraSatch Edge entry opens the Operator Console, while status, diagnostics, hardware scan, and terminal setup remain separate shortcuts. The v0.2.3 source includes the receive-only BCA/FRS radio path, but the public Windows download must stay on the previously validated artifact until the exact v0.2.3 signed installer passes the release checklist.
+That direct `.exe` must remain clearly labeled unsigned unless TerraSatch later chooses a separate trusted-signing provider.
 
 macOS:
 
@@ -219,7 +228,7 @@ PyInstaller builds must be run on the operating system and architecture being pa
 
 TerraSatch Edge source is publicly reviewable in this repository. Reviewers can inspect the runtime, native packaging scripts, Windows installer definition, radio receive adapter, tests, and release controls before installing a binary.
 
-For a public Windows release, TerraSatch uses immutable versioned Blob objects and publishes the SHA-256 of the exact validated installer. A new version is published at a new path rather than replacing older bytes in place.
+For public Windows distribution, TerraSatch prefers the Microsoft Store MSIX route and publishes checksums/provenance for any direct compatibility artifacts. Versioned direct-download objects remain immutable; new bytes require a new version/path.
 
 See [`docs/PUBLIC_RELEASE_CHECKLIST.md`](docs/PUBLIC_RELEASE_CHECKLIST.md) for the public release gate, including API readiness, clean-machine install validation, Authenticode verification, checksum recording, Blob publication, and post-upload verification.
 
@@ -249,7 +258,8 @@ The v0.2.3 receive pilot can tune a selected BCA/FRS channel, capture a bounded 
 - the Operator Console binds to loopback by default and rejects remote binds without explicit opt-in
 - Windows pilot files are ACL-hardened under ProgramData
 - POSIX system packages keep config/state root-owned and require `sudo` for setup/status/doctor
-- production public Windows installers must pass trusted Authenticode signing and timestamp verification before publication
+- public Microsoft Store MSIX packages must pass Store certification and Microsoft signing before being presented as the trusted Windows install path
+- direct Windows `.exe` artifacts remain compatibility/beta downloads unless separately trusted-signed
 
 ## QA
 
