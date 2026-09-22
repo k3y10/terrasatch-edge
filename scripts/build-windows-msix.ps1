@@ -85,7 +85,7 @@ if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed with exit code $LASTEXITCOD
 if ($LASTEXITCODE -ne 0) { throw "MSIX build dependency installation failed with exit code $LASTEXITCODE." }
 
 $IconFile = Join-Path $Root "packaging\windows\assets\TerraSatchEdge.ico"
-$LogoSource = Join-Path $Root "src\terrasatch_edge\assets\terrasatch-logo.webp"
+$LogoSource = Join-Path $Root "src\terrasatch_edge\assets\terrasatch-logo.png"
 $ManifestTemplate = Join-Path $Root "packaging\windows\msix\AppxManifest.template.xml"
 foreach ($RequiredPath in @($LogoSource, $ManifestTemplate)) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) { throw "MSIX prerequisite missing: $RequiredPath" }
