@@ -2,14 +2,17 @@ name: Public Edge Release
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/public-edge-release.yml"
+    inputs:
+      allow_unsigned_windows_beta:
+        description: "Allow an unsigned Windows beta build when no TerraSatch code-signing certificate is configured"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   linux-amd64:
@@ -23,20 +26,34 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Resolve Edge version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Build Linux AMD64 package
         run: ./scripts/build-linux-deb.sh
+
+      - name: Attest Linux build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/terrasatch-edge_${{ steps.version.outputs.version }}_amd64.deb
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: edge-linux-amd64
-          path: |
-            release/terrasatch-edge_0.2.4_amd64.deb
+          path: release/terrasatch-edge_${{ steps.version.outputs.version }}_amd64.deb
           if-no-files-found: error
 
   windows-x64:
     runs-on: windows-latest
     timeout-minutes: 35
+    env:
+      TERRASATCH_CODESIGN_PFX_BASE64: ${{ secrets.TERRASATCH_CODESIGN_PFX_BASE64 }}
+      TERRASATCH_CODESIGN_PFX_PASSWORD: ${{ secrets.TERRASATCH_CODESIGN_PFX_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,13 +66,53 @@ jobs:
         shell: powershell
         run: choco install innosetup --no-progress -y
 
+      - name: Import TerraSatch Windows signing certificate
+        if: env.TERRASATCH_CODESIGN_PFX_BASE64 != ''
+        shell: powershell
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "terrasatch-codesign.pfx"
+          [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($env:TERRASATCH_CODESIGN_PFX_BASE64))
+          $password = ConvertTo-SecureString $env:TERRASATCH_CODESIGN_PFX_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          if (-not $certificate) { throw "TerraSatch code-signing certificate import failed." }
+          "TERRASATCH_CODESIGN_CERT_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Remove-Item $pfxPath -Force
+
       - name: Stage RTL-SDR runtime
         shell: powershell
         run: ./scripts/stage-rtlsdr-windows.ps1
 
-      - name: Build Windows x64 compatibility installer
+      - name: Build Windows x64 installer
         shell: powershell
-        run: ./scripts/build-windows.ps1 -AllowUnsigned
+        run: |
+          if ($env:TERRASATCH_CODESIGN_CERT_THUMBPRINT) {
+            ./scripts/build-windows.ps1
+          } elseif ("${{ inputs.allow_unsigned_windows_beta }}" -eq "true") {
+            ./scripts/build-windows.ps1 -AllowUnsigned
+          } else {
+            throw "Public Windows release requires Authenticode signing. Configure the TerraSatch PFX secrets or explicitly run an unsigned beta."
+          }
+
+      - name: Record Windows signing state
+        shell: powershell
+        run: |
+          $installer = "release\TerraSatch-Edge-Setup-x64.exe"
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -eq "Valid") {
+            $state = "signed"
+            $subject = $signature.SignerCertificate.Subject
+            $thumbprint = $signature.SignerCertificate.Thumbprint
+          } else {
+            $state = "unsigned-beta"
+            $subject = ""
+            $thumbprint = ""
+          }
+          @("Status=$state", "Signer=$subject", "Thumbprint=$thumbprint") | Set-Content -Path "release\WINDOWS-SIGNING.txt" -Encoding utf8
+
+      - name: Attest Windows build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/TerraSatch-Edge-Setup-x64.exe
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -63,6 +120,7 @@ jobs:
           name: edge-windows-x64
           path: |
             release/TerraSatch-Edge-Setup-x64.exe
+            release/WINDOWS-SIGNING.txt
           if-no-files-found: error
 
   publish:
@@ -73,44 +131,77 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve Edge version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Download built artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
 
-      - name: Publish v0.2.4 compatibility release
+      - name: Publish immutable Edge release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          WINDOWS="release-assets/edge-windows-x64/TerraSatch-Edge-Setup-x64.exe"
-          LINUX="release-assets/edge-linux-amd64/terrasatch-edge_0.2.4_amd64.deb"
-          sha256sum "$WINDOWS" "$LINUX" | tee release-assets/SHA256SUMS.txt
 
-          NOTES="$(cat <<'EOF'
-          TerraSatch Edge v0.2.4 compatibility release for the merged Satchy/API control-plane generation.
+          TAG="v${VERSION}"
+          WINDOWS="release-assets/edge-windows-x64/TerraSatch-Edge-Setup-x64.exe"
+          WINDOWS_SIGNING="release-assets/edge-windows-x64/WINDOWS-SIGNING.txt"
+          LINUX="release-assets/edge-linux-amd64/terrasatch-edge_${VERSION}_amd64.deb"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Refusing to overwrite immutable release assets." >&2
+            exit 1
+          fi
+
+          WINDOWS_SHA="$(sha256sum "$WINDOWS" | awk '{print $1}')"
+          LINUX_SHA="$(sha256sum "$LINUX" | awk '{print $1}')"
+          {
+            printf "%s  %s\n" "$WINDOWS_SHA" "$(basename "$WINDOWS")"
+            printf "%s  %s\n" "$LINUX_SHA" "$(basename "$LINUX")"
+          } > release-assets/SHA256SUMS.txt
+
+          WINDOWS_STATUS="$(awk -F= '/^Status=/{print $2}' "$WINDOWS_SIGNING" | tr -d '\r')"
+          if [ "$WINDOWS_STATUS" = "signed" ]; then
+            WINDOWS_NOTE="- Windows installer is Authenticode-signed and timestamped."
+          else
+            WINDOWS_NOTE="- Windows installer is an explicitly permitted unsigned beta build; Windows SmartScreen may warn."
+          fi
+
+          NOTES="$(cat <<EOF
+          TerraSatch Edge $TAG for the current TerraSatch field/control-plane generation.
 
           Public downloads:
           - Windows 10/11 x64 installer (.exe)
           - Debian/Ubuntu AMD64 package (.deb)
 
+          Trust and verification:
+          $WINDOWS_NOTE
+          - SHA-256 values are published in SHA256SUMS.txt.
+          - Both native artifacts have GitHub build-provenance attestations.
+          - Verify provenance with: gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge
+          - Release assets are immutable: this workflow refuses to overwrite an existing version.
+
+          Current platform connection surface:
+          - TerraSatch Edge field runtime for pairing, heartbeat, hardware inventory, radio receive, and Satchy control.
+          - TerraSatch Mobile and Garmin inReach feed the same canonical API field-ingest pipeline.
+          - TerraSatch API currently exposes 20 supported integration providers plus TerraSatch Edge and Mapbox as managed providers.
+          - Garmin inReach Portal Connect remains partner-gated; onX Backcountry, Gaia GPS, and AllTrails remain coming soon.
+
           Notes:
-          - Windows installer is an unsigned compatibility build.
           - Windows includes the staged RTL-SDR runtime used by the Edge receive path.
           - Linux recommends the distribution rtl-sdr package.
-          - macOS packages are intentionally not published for this release.
+          - macOS packages are intentionally not published in this release lane.
           - Field-asset mission providers remain disabled unless an explicit provider integration is configured.
 
-          Source: merged main branch.
+          Source commit: ${GITHUB_SHA}
           EOF
           )"
 
-          if gh release view v0.2.4 >/dev/null 2>&1; then
-            gh release upload v0.2.4 "$WINDOWS" "$LINUX" release-assets/SHA256SUMS.txt --clobber
-            gh release edit v0.2.4 --title "TerraSatch Edge v0.2.4" --notes "$NOTES"
-          else
-            gh release create v0.2.4 "$WINDOWS" "$LINUX" release-assets/SHA256SUMS.txt \
-              --target "${GITHUB_SHA}" \
-              --title "TerraSatch Edge v0.2.4" \
-              --notes "$NOTES"
-          fi
+          gh release create "$TAG"             "$WINDOWS"             "$LINUX"             release-assets/SHA256SUMS.txt             "$WINDOWS_SIGNING"             --target "${GITHUB_SHA}"             --title "TerraSatch Edge $TAG"             --notes "$NOTES"
