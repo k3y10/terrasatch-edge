@@ -194,9 +194,9 @@ $env:TERRASATCH_MSIX_PUBLISHER_DISPLAY_NAME = "TerraSatch Inc."
 .\scripts\build-windows-msix.ps1 -StoreUpload
 ```
 
-The MSIX contains the TerraSatch operator launcher plus packaged `TerraSatchEdge` and `TerraSatchRadio` Windows services. Local development MSIX files are signed with a local test certificate so they can be installed on a controlled machine. The Partner Center submission package is intentionally unsigned locally; Microsoft Store applies the production package signature after certification.
+The MSIX contains the TerraSatch operator launcher plus two per-user startup processes: the Edge agent is enabled by default after the first app launch, while the receive-only radio process is packaged but disabled until the operator has paired Edge and configured a receive target. Local development MSIX files are signed with a local test certificate so they can be installed on a controlled machine. The Partner Center submission package is intentionally unsigned locally; Microsoft Store applies the production package signature after certification.
 
-The free Store path preserves TerraSatch's proprietary license and avoids placing a private production signing key in GitHub. The manifest requests the restricted `packagedServices` capability, so Store certification must approve that capability before public distribution.
+The free Store path preserves TerraSatch's proprietary license and avoids placing a private production signing key in GitHub. The Store package deliberately avoids `packagedServices` and `localSystemServices`; it uses the standard packaged-desktop `runFullTrust` declaration and Windows startup-task extension instead.
 
 The existing Inno Setup compatibility build remains available for controlled beta/direct-download testing:
 
