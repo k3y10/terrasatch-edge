@@ -172,3 +172,32 @@ def test_windows_msix_qa_is_local_first_and_actions_are_manual_only() -> None:
     assert "-m ruff check src tests" in local_qa
     assert "signtool.exe" in local_qa
     assert "Get-FileHash" in local_qa
+
+
+def test_store_msix_requires_partner_identity_and_store_valid_version() -> None:
+    build_script = (ROOT / "scripts" / "build-windows-msix.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "$IdentityNameWasProvided" in build_script
+    assert "TERRASATCH_MSIX_IDENTITY_NAME" in build_script
+    assert 'StoreUpload cannot use the development identity TerraSatch.Edge.Dev' in build_script
+    assert "$MsixMajor = $VersionNumbers[0] + 1" in build_script
+    assert "$MsixRevision -ne 0" in build_script
+
+
+def test_release_docs_track_project_version_and_do_not_pin_old_msix_qa_artifacts() -> None:
+    payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version = payload["project"]["version"]
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    native = (ROOT / "docs" / "NATIVE_BUILDS.md").read_text(encoding="utf-8")
+    release_workflow = (
+        ROOT / ".github" / "workflows" / "public-edge-release.yml"
+    ).read_text(encoding="utf-8")
+
+    assert f"Current source milestone: **v{version} " in readme
+    assert f"Current development package version: **{version}**" in native
+    assert "35692293668" not in release_workflow
+    assert "34fbf1e8943cad452a01c7b7ae56f07f" not in release_workflow
+    assert "expected_msix_sha256" in release_workflow
+    assert "expected_cert_sha256" in release_workflow
