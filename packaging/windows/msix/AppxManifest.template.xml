@@ -3,9 +3,9 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
-  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap10 desktop6 rescap">
+  IgnorableNamespaces="uap uap10 desktop rescap">
 
   <Identity
     Name="__IDENTITY_NAME__"
@@ -46,29 +46,30 @@
         Square44x44Logo="Assets\Square44x44Logo.png" />
 
       <Extensions>
-        <desktop6:Extension
-          Category="windows.service"
-          Executable="TerraSatchEdgeService.exe">
-          <desktop6:Service
-            Name="TerraSatchEdge"
-            StartupType="auto"
-            StartAccount="localSystem" />
-        </desktop6:Extension>
+        <desktop:Extension
+          Category="windows.startupTask"
+          Executable="TerraSatchEdgeAgentLauncher.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask
+            TaskId="TerraSatchEdgeAgent"
+            Enabled="true"
+            DisplayName="TerraSatch Edge" />
+        </desktop:Extension>
 
-        <desktop6:Extension
-          Category="windows.service"
-          Executable="TerraSatchRadioService.exe">
-          <desktop6:Service
-            Name="TerraSatchRadio"
-            StartupType="manual"
-            StartAccount="localSystem" />
-        </desktop6:Extension>
+        <desktop:Extension
+          Category="windows.startupTask"
+          Executable="TerraSatchRadioLauncher.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask
+            TaskId="TerraSatchRadio"
+            Enabled="false"
+            DisplayName="TerraSatch Radio" />
+        </desktop:Extension>
       </Extensions>
     </Application>
   </Applications>
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
-    <rescap:Capability Name="packagedServices" />
   </Capabilities>
 </Package>
