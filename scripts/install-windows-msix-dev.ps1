@@ -58,4 +58,3 @@ Write-Host ""
 Write-Host "After testing, uninstall with:" -ForegroundColor Yellow
 Write-Host "  Get-AppxPackage -Name $IdentityName | Remove-AppxPackage"
 Write-Host "Then remove the temporary development certificate from LocalMachine\TrustedPeople by thumbprint: $($imported.Thumbprint)"
-
