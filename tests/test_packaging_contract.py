@@ -137,4 +137,8 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "Capture once. Share the same Satchy context." in operator_page
     assert "Arbitrary SMS/iMessage/third-party chat ingestion" in operator_page
     assert "binary media upload" in operator_page
+    assert "Radio receive" in operator_page
+    assert "This does not enable transmit." in operator_page
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "qrcode>=8,<9" in pyproject
     assert "Scan local hardware" in operator_page
