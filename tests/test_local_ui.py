@@ -145,11 +145,12 @@ def test_windows_console_renders_simple_guided_setup(tmp_path, monkeypatch):
     response = TestClient(local_ui.build_app()).get("/")
 
     assert response.status_code == 200
-    assert "Windows setup" in response.text
-    assert "Set up this Edge" in response.text
-    assert "Check this PC" in response.text
-    assert "Pair with TerraSatch" in response.text
-    assert "Verify and finish" in response.text
+    assert "Windows gateway setup" in response.text
+    assert "Connect this Edge to TerraSatch" in response.text
+    assert "Check the gateway" in response.text
+    assert "Pair your workspace" in response.text
+    assert "Verify the connection" in response.text
+    assert "Local field hardware is optional during setup." in response.text
     assert '<div class="brand-lockup"' in response.text
 
 
@@ -183,9 +184,14 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     response = TestClient(local_ui.build_app()).get("/")
 
     assert response.status_code == 200
-    assert "This Edge is ready" in response.text
+    assert "Your field gateway is online" in response.text
     assert "Snowbird Operations" in response.text
-    assert "Run a quick check" in response.text
+    assert "Test gateway flow" in response.text
+    assert "Connect field inputs" in response.text
+    assert "Phone / TerraSatch Mobile" in response.text
+    assert "Radio / SDR" in response.text
+    assert "Meshtastic / LoRa" in response.text
+    assert "Garmin / inReach" in response.text
     assert 'src="/assets/terrasatch-logo.webp"' in response.text
     assert "brand-lockup-values" in response.text
     assert "Field Intelligence" in response.text
