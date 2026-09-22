@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 serial = ["pyserial>=3.5,<4"]
 usb = ["pyusb>=1.2,<2"]
-ui = ["fastapi>=0.115,<1", "uvicorn[standard]>=0.30,<1"]
+ui = ["fastapi>=0.115,<1", "uvicorn[standard]>=0.30,<1", "qrcode>=8,<9"]
 speech = ["faster-whisper>=1.1,<2"]
 build = [
     "pyinstaller>=6.11,<7",
