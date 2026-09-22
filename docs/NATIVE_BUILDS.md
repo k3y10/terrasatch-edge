@@ -225,7 +225,7 @@ For every new artifact:
    `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`.
 14. On Windows, verify the chosen distribution path: Store MSIX packages must be Store-certified/Microsoft-signed; direct `.exe` artifacts must remain beta unless separately Authenticode-signed.
 
-The direct-download public release workflow remains manual-only and immutable. The Microsoft Store MSIX path is built separately so Store identity/certification can remain distinct from GitHub compatibility releases.
+The manual GitHub public-release workflow publishes the Linux direct artifact only. Windows Store packages are built and validated locally, then submitted through Partner Center so development certificates and development-signed MSIX files never become public release assets.
 
 
 ## Independent native radio services
