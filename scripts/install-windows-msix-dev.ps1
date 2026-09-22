@@ -21,6 +21,20 @@ $imported = Import-Certificate `
     -CertStoreLocation "Cert:\LocalMachine\TrustedPeople"
 if (-not $imported) { throw "Development certificate import failed." }
 
+$signature = Get-AuthenticodeSignature -LiteralPath $MsixPath
+if (-not $signature.SignerCertificate) {
+    throw "MSIX does not expose an Authenticode signer certificate after trust import."
+}
+$expectedThumbprint = ($imported.Thumbprint -replace "\s", "").ToUpperInvariant()
+$actualThumbprint = ($signature.SignerCertificate.Thumbprint -replace "\s", "").ToUpperInvariant()
+if ($actualThumbprint -ne $expectedThumbprint) {
+    throw "Installed QA certificate does not match the MSIX signer."
+}
+if ($signature.Status.ToString() -ne "Valid") {
+    throw "MSIX did not become fully trusted after LocalMachine\\TrustedPeople import: $($signature.Status) $($signature.StatusMessage)"
+}
+Write-Host "Machine trust verification passed for the exact TerraSatch QA signer." -ForegroundColor Green
+
 Write-Host "Installing $MsixPath" -ForegroundColor Cyan
 Add-AppxPackage -Path $MsixPath -ForceApplicationShutdown
 
