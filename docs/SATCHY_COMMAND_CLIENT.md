@@ -3,7 +3,7 @@
 The historical simulation-only milestone below is extended by the
 [current bidirectional provider implementation](RADIO_TX_PROVIDER.md).
 
-TerraSatch Edge v0.2.5 provides the API-to-Edge control-plane client while preserving the receive-first radio path. The current Satchy branch also adds a provider-neutral `asset_mission` boundary with capability negotiation, remote policy/binding validation, and durable at-most-once effect claims.
+TerraSatch Edge v0.2.8 provides the API-to-Edge control-plane client while preserving the receive-first radio path. The current Satchy branch also adds a provider-neutral `asset_mission` boundary with capability negotiation, remote policy/binding validation, and durable at-most-once effect claims.
 
 ## Safety boundary
 
