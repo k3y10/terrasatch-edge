@@ -1,4 +1,4 @@
-name: Public Edge Release
+name: Public Edge Release (manual only)
 
 on:
   workflow_dispatch:
@@ -6,7 +6,14 @@ on:
       msix_run_id:
         description: "Validated Windows MSIX QA run to publish"
         required: true
-        default: "35692293668"
+        type: string
+      expected_msix_sha256:
+        description: "SHA-256 of the exact validated MSIX"
+        required: true
+        type: string
+      expected_cert_sha256:
+        description: "SHA-256 of the exact validation certificate"
+        required: true
         type: string
 permissions:
   contents: write
@@ -15,9 +22,9 @@ permissions:
   attestations: write
 
 env:
-  VALIDATED_MSIX_RUN_ID: ${{ inputs.msix_run_id || '35692293668' }}
-  EXPECTED_MSIX_SHA256: "34fbf1e8943cad452a01c7b7ae56f07fed5c4be5243b9c6d16c65849b0b911ab"
-  EXPECTED_CERT_SHA256: "61398cfbf45ee52e77dff0e392b05b2902fa7b19a8ce931740c45d6c91d9e15d"
+  VALIDATED_MSIX_RUN_ID: ${{ inputs.msix_run_id }}
+  EXPECTED_MSIX_SHA256: ${{ inputs.expected_msix_sha256 }}
+  EXPECTED_CERT_SHA256: ${{ inputs.expected_cert_sha256 }}
 
 jobs:
   linux-amd64:
@@ -148,9 +155,8 @@ jobs:
           This certificate is a development/test trust certificate for the exact validated
           MSIX release. It is not the Microsoft Store production signature.
 
-          Certificate subject: CN=TerraSatch Inc.
-          Certificate SHA-1 thumbprint: 2B9ACCA401513722041596B9A9D6537056C726EC
-          Certificate valid through: 2026-09-29 05:51:11 UTC
+          Certificate identity, thumbprint, and validity are recorded in WINDOWS-MSIX-TRUST.txt
+          from the exact certificate paired with this release.
           EOF
 
       - name: Publish immutable Edge prerelease
@@ -181,9 +187,7 @@ jobs:
 
           Windows trust:
           - The MSIX and certificate are the exact pair validated by Windows MSIX QA run ${VALIDATED_MSIX_RUN_ID}.
-          - Certificate subject: CN=TerraSatch Inc.
-          - Certificate SHA-1 thumbprint: 2B9ACCA401513722041596B9A9D6537056C726EC
-          - Certificate valid through September 29, 2026 05:51:11 UTC.
+          - Certificate identity, thumbprint, and validity are recorded from the exact validated certificate in WINDOWS-MSIX-TRUST.txt.
           - This is a development/test self-signed certificate, not Microsoft Store production signing.
           - No PFX/private key is published.
 
