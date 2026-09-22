@@ -4,10 +4,33 @@
 
 TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
-> Current source milestone: **v0.2.4 Satchy command/control runtime + receive-first BCA/FRS monitoring**
+> Current source milestone: **v0.2.5 release-trust + Satchy command/control runtime + receive-first BCA/FRS monitoring**
 > Field-asset mission support is provider-neutral infrastructure only; no drone, robot, or relay provider is installed by default.
-> Current public Windows installer remains separately release-gated and should only advance after signed clean-machine validation.  
-> Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge) · exact v0.2.3 source snapshot: [`87961ce`](https://github.com/k3y10/terrasatch-edge/commit/87961cea7d2cdd8ad57b8d48b0732f0c694b0c97)
+> The existing v0.2.4 Windows installer remains an unsigned beta compatibility build. v0.2.5 is release-gated for SHA-256, GitHub build provenance, and Authenticode signing when the TerraSatch signing certificate is configured.  
+> Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge)
+
+## Current TerraSatch connection surface
+
+TerraSatch Edge is one field-input/runtime layer inside the broader TerraSatch platform. The current platform now includes:
+
+- **TerraSatch Edge** — pairing, heartbeat, hardware inventory, receive-first radio ingestion, offline outbox, and controlled Satchy commands.
+- **TerraSatch Mobile** — authenticated notes, voice transcripts, photo-note references, GPS, and client idempotency into the canonical field-ingest pipeline.
+- **Garmin inReach Portal Connect** — partner-gated receive path for professional inReach messaging into that same canonical pipeline.
+- **20 supported API integration providers** for documents, communications, calendars, work management, mapping, storage, weather, and data.
+- **2 TerraSatch-managed providers** — TerraSatch Edge and Mapbox.
+- **Coming soon** — onX Backcountry, Gaia GPS, and AllTrails where provider access permits.
+
+Third-party runtime readiness still depends on each organization's credentials, administrator configuration, and provider access. Garmin remains partner-gated until a live approved tenant is available for acceptance testing.
+
+## Verify public downloads
+
+For every public Edge release, verify the exact downloaded artifact rather than trusting the filename alone:
+
+- compare its **SHA-256** with the release `SHA256SUMS.txt`;
+- verify its GitHub build provenance with `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`;
+- on Windows, verify **Authenticode** with `Get-AuthenticodeSignature` and confirm a valid expected TerraSatch signer before treating the installer as signed.
+
+SHA-256 confirms integrity and GitHub attestation confirms build provenance. Neither substitutes for Windows publisher signing or SmartScreen reputation.
 
 ## Pilot architecture
 
