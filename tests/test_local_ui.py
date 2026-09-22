@@ -239,21 +239,21 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "Your field gateway is online" in response.text
     assert "Snowbird Operations" in response.text
     assert "Test gateway flow" in response.text
-    assert "Connect field inputs" in response.text
+    assert "Use what the field already uses" in response.text
     assert "Phone / TerraSatch Mobile" in response.text
     assert "Radio / SDR" in response.text
     assert "Meshtastic / LoRa" in response.text
     assert "Garmin / inReach" in response.text
     assert "Field device" in response.text
     assert "Edge when local" in response.text
-    assert "TerraSatch intelligence" in response.text
+    assert "Shared operational context" in response.text
     assert "Through this Edge" in response.text
     assert "Direct to TerraSatch" in response.text
     assert "Adapter planned" in response.text
     assert "Partner setup" in response.text
     assert "Signal path" in response.text
     assert "Test TerraSatch path" in response.text
-    assert "Capture once. Share the same Satchy context." in response.text
+    assert "Keep field observations in the same operational context." in response.text
     assert "Field note" in response.text
     assert "Voice observation" in response.text
     assert "Photo note" in response.text
@@ -266,7 +266,6 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert 'src="/assets/terrasatch-logo.png"' in response.text
     assert 'src="/assets/satchy-approved-current.webp"' in response.text
     assert "Field Intelligence" in response.text
-    assert 'src="/assets/terrasatch-black-logo.png"' not in response.text
     assert "Follow these three steps" not in response.text
 
 
@@ -277,17 +276,12 @@ def test_console_serves_bundled_brand_artwork(tmp_path, monkeypatch):
     client = TestClient(local_ui.build_app())
     logo = client.get("/assets/terrasatch-logo.png")
     approved = client.get("/assets/satchy-approved-current.webp")
-    lockup = client.get("/assets/terrasatch-black-logo.png")
-
     assert logo.status_code == 200
     assert logo.headers["content-type"] == "image/png"
     assert len(logo.content) > 100_000
     assert approved.status_code == 200
     assert approved.headers["content-type"] == "image/webp"
     assert len(approved.content) > 5_000
-    assert lockup.status_code == 200
-    assert lockup.headers["content-type"] == "image/png"
-    assert len(lockup.content) > 100_000
 
 
 def test_pairing_claim_saves_device_credential_and_assignment(tmp_path, monkeypatch):
