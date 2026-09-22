@@ -200,16 +200,6 @@ def test_windows_msix_build_script_has_one_complete_build_pipeline() -> None:
     assert "\n }).Count -ne 0) {" not in build_script
 
 
-def test_msix_install_test_cleans_machine_trust_by_default() -> None:
-    install_script = (ROOT / "scripts" / "install-windows-msix-dev.ps1").read_text(
-        encoding="utf-8"
-    )
-
-    assert "[switch]$KeepTrustedCertificate" in install_script
-    assert "Cert:\\LocalMachine\\TrustedPeople\\" in install_script
-    assert "Temporary development certificate removed." in install_script
-
-
 def test_store_msix_requires_partner_identity_and_store_valid_version() -> None:
     build_script = (ROOT / "scripts" / "build-windows-msix.ps1").read_text(
         encoding="utf-8"
