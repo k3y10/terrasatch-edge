@@ -155,10 +155,18 @@ def build_app() -> Any:
 
     app = FastAPI(title="TerraSatch Edge Operator Console", docs_url=None, redoc_url=None)
 
-    @app.get("/assets/terrasatch-logo.webp", include_in_schema=False)
+    @app.get("/assets/terrasatch-logo.png", include_in_schema=False)
     def brand_mark() -> Response:
         return Response(
-            content=_brand_asset("terrasatch-logo.webp"),
+            content=_brand_asset("terrasatch-logo.png"),
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+
+    @app.get("/assets/satchy-approved-current.webp", include_in_schema=False)
+    def satchy_approved_mark() -> Response:
+        return Response(
+            content=_brand_asset("satchy-approved-current.webp"),
             media_type="image/webp",
             headers={"Cache-Control": "public, max-age=31536000, immutable"},
         )
