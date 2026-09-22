@@ -6,13 +6,11 @@ on:
       - main
     paths:
       - ".github/workflows/windows-msix-qa.yml"
-      - "packaging/entrypoints/edge_msix_console.py"
+      - "packaging/entrypoints/**"
       - "packaging/windows/msix/**"
-      - "packaging/windows/TerraSatchEdgeService.xml"
-      - "packaging/windows/TerraSatchRadioService.xml"
       - "scripts/build-windows-msix.ps1"
-      - "scripts/build-windows.ps1"
       - "scripts/stage-rtlsdr-windows.ps1"
+      - "scripts/verify-rtlsdr-runtime.py"
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
@@ -35,10 +33,6 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install Inno Setup
-        shell: powershell
-        run: choco install innosetup --no-progress -y
-
       - name: Create temporary MSIX development certificate
         shell: powershell
         run: |
@@ -59,6 +53,9 @@ jobs:
           Import-Certificate `
             -FilePath "release\TerraSatch-MSIX-Dev.cer" `
             -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
+          Import-Certificate `
+            -FilePath "release\TerraSatch-MSIX-Dev.cer" `
+            -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
 
           "TERRASATCH_MSIX_CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File `
             -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -71,28 +68,33 @@ jobs:
         shell: powershell
         run: ./scripts/build-windows-msix.ps1
 
-      - name: Validate MSIX manifest contract
+      - name: Validate Store-friendly MSIX manifest
         shell: powershell
         run: |
           [xml]$manifest = Get-Content "release\msix-verify\AppxManifest.xml"
           $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
           $ns.AddNamespace("f", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
-          $ns.AddNamespace("desktop6", "http://schemas.microsoft.com/appx/manifest/desktop/windows10/6")
+          $ns.AddNamespace("desktop", "http://schemas.microsoft.com/appx/manifest/desktop/windows10")
           $ns.AddNamespace("rescap", "http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities")
 
           $identity = $manifest.SelectSingleNode("/f:Package/f:Identity", $ns)
           if ($identity.Name -ne "TerraSatch.Edge.Dev") { throw "Unexpected MSIX identity: $($identity.Name)" }
           if ($identity.Publisher -ne "CN=TerraSatch Inc.") { throw "Unexpected MSIX publisher: $($identity.Publisher)" }
 
-          $services = $manifest.SelectNodes("//desktop6:Extension[@Category='windows.service']/desktop6:Service", $ns)
-          if ($services.Count -ne 2) { throw "Expected 2 packaged services, found $($services.Count)." }
-          $serviceNames = @($services | ForEach-Object { $_.Name })
-          if ("TerraSatchEdge" -notin $serviceNames) { throw "TerraSatchEdge packaged service missing." }
-          if ("TerraSatchRadio" -notin $serviceNames) { throw "TerraSatchRadio packaged service missing." }
+          $serviceExtensions = $manifest.SelectNodes("//desktop:Extension[@Category='windows.service']", $ns)
+          if ($serviceExtensions.Count -ne 0) { throw "Store MSIX must not declare packaged Windows services." }
+
+          $startup = $manifest.SelectNodes("//desktop:Extension[@Category='windows.startupTask']/desktop:StartupTask", $ns)
+          if ($startup.Count -ne 2) { throw "Expected 2 startup tasks, found $($startup.Count)." }
+          $edgeTask = @($startup | Where-Object { $_.TaskId -eq "TerraSatchEdgeAgent" })
+          $radioTask = @($startup | Where-Object { $_.TaskId -eq "TerraSatchRadio" })
+          if ($edgeTask.Count -ne 1 -or $edgeTask[0].Enabled -ne "true") { throw "TerraSatch Edge startup task must be enabled." }
+          if ($radioTask.Count -ne 1 -or $radioTask[0].Enabled -ne "false") { throw "TerraSatch Radio startup task must default disabled." }
 
           $capabilities = @($manifest.SelectNodes("//rescap:Capability", $ns) | ForEach-Object { $_.Name })
           if ("runFullTrust" -notin $capabilities) { throw "runFullTrust capability missing." }
-          if ("packagedServices" -notin $capabilities) { throw "packagedServices capability missing." }
+          if ("packagedServices" -in $capabilities) { throw "packagedServices must not be present in Store MSIX." }
+          if ("localSystemServices" -in $capabilities) { throw "localSystemServices must not be present in Store MSIX." }
 
       - name: Verify MSIX signature
         shell: powershell
