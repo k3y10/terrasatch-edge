@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 import terrasatch_edge.local_ui as local_ui
 from terrasatch_edge.config import EdgeConfig, load_api_key, load_config, save_config
-from terrasatch_edge.models import EdgeDevice, PairingClaim, SystemSnapshot
+from terrasatch_edge.models import EdgeDevice, PairingClaim, PairingStart, SystemSnapshot
 
 
 OPERATOR_HEADERS = {"X-TerraSatch-Edge-UI": "1"}
@@ -113,6 +113,50 @@ def test_status_payload_does_not_expose_remote_config_or_identity(tmp_path, monk
     assert "remote_config" not in payload
     assert "identity_detail" not in payload
 
+def test_pairing_qr_encodes_only_verification_url() -> None:
+    verification_url = "https://api.terrasatch.com/admin/edge/pair?code=ABCD-1234"
+    data_uri = local_ui._pairing_qr_data_uri(verification_url)
+
+    assert data_uri is not None
+    assert data_uri.startswith("data:image/svg+xml;base64,")
+    assert "device-secret" not in data_uri
+    assert local_ui._pairing_qr_data_uri("javascript:alert(1)") is None
+
+
+def test_pairing_start_returns_qr_for_short_lived_approval_url(tmp_path, monkeypatch):
+    _configure_paths(tmp_path, monkeypatch)
+    save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
+    monkeypatch.setattr(local_ui, "scan_hardware", lambda include_network=False: _snapshot())
+
+    class FakeClient:
+        def __init__(self, base_url: str, api_key: str | None = None, timeout: float = 10.0) -> None:
+            self.base_url = base_url
+            self.api_key = api_key
+
+        def start_pairing(self, **_kwargs) -> PairingStart:
+            return PairingStart(
+                pairing_id="00000000-0000-0000-0000-000000000001",
+                device_code="device-code-for-test-12345",
+                user_code="ABCD-1234",
+                verification_url="https://api.terrasatch.com/admin/edge/pair?code=ABCD-1234",
+                expires_at="2026-09-22T04:30:00Z",
+                interval_seconds=5,
+            )
+
+    monkeypatch.setattr(local_ui, "TerraSatchApiClient", FakeClient)
+
+    response = TestClient(local_ui.build_app()).post(
+        "/api/pairing/start",
+        headers=OPERATOR_HEADERS,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["pairing_method"] == "qr_or_browser"
+    assert payload["user_code"] == "ABCD-1234"
+    assert payload["qr_data_uri"].startswith("data:image/svg+xml;base64,")
+    assert "device-code-for-test-12345" not in payload["qr_data_uri"]
+
 
 def test_windows_console_renders_simple_guided_setup(tmp_path, monkeypatch):
     _configure_paths(tmp_path, monkeypatch)
@@ -201,6 +245,13 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "Partner setup" in response.text
     assert "Signal path" in response.text
     assert "Test TerraSatch path" in response.text
+    assert "Capture once. Share the same Satchy context." in response.text
+    assert "Field note" in response.text
+    assert "Voice observation" in response.text
+    assert "Photo note" in response.text
+    assert "Location" in response.text
+    assert "Arbitrary SMS/iMessage/third-party chat ingestion" in response.text
+    assert "binary media upload" in response.text
     assert 'src="/assets/terrasatch-logo.webp"' in response.text
     assert "brand-lockup-values" in response.text
     assert "Field Intelligence" in response.text
