@@ -44,6 +44,10 @@ class ConfigUpdate(BaseModel):
     speech_language: str | None = None
     speech_vad_filter: bool | None = None
     speech_local_files_only: bool | None = None
+    radio_profile: str | None = None
+    radio_channel: int | None = Field(default=None, ge=1, le=22)
+    radio_squelch: int | None = Field(default=None, ge=1, le=100)
+    radio_auto_calibrate: bool | None = None
 
 
 class PairingClaimRequest(BaseModel):
@@ -133,6 +137,10 @@ def _safe_config_payload(config: EdgeConfig) -> dict[str, Any]:
         "speech_language": config.speech_language,
         "speech_vad_filter": config.speech_vad_filter,
         "speech_local_files_only": config.speech_local_files_only,
+        "radio_profile": config.radio_profile,
+        "radio_channel": config.radio_channel,
+        "radio_squelch": config.radio_squelch,
+        "radio_auto_calibrate": config.radio_auto_calibrate,
     }
 
 
@@ -194,6 +202,12 @@ def build_app() -> Any:
         if "source" in changes:
             value = changes["source"]
             changes["source"] = str(value).strip() if value is not None and str(value).strip() else "terrasatch-edge"
+
+        if "radio_profile" in changes:
+            value = changes["radio_profile"]
+            changes["radio_profile"] = (
+                str(value).strip() if value is not None and str(value).strip() else current.radio_profile
+            )
 
         merged = current.model_dump()
         merged.update(changes)
