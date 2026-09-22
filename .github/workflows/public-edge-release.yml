@@ -168,10 +168,12 @@ jobs:
           } > release-assets/SHA256SUMS.txt
 
           WINDOWS_STATUS="$(awk -F= '/^Status=/{print $2}' "$WINDOWS_SIGNING" | tr -d '\r')"
+          RELEASE_FLAG=""
           if [ "$WINDOWS_STATUS" = "signed" ]; then
             WINDOWS_NOTE="- Windows installer is Authenticode-signed and timestamped."
           else
             WINDOWS_NOTE="- Windows installer is an explicitly permitted unsigned beta build; Windows SmartScreen may warn."
+            RELEASE_FLAG="--prerelease"
           fi
 
           NOTES="$(cat <<EOF
@@ -204,4 +206,4 @@ jobs:
           EOF
           )"
 
-          gh release create "$TAG"             "$WINDOWS"             "$LINUX"             release-assets/SHA256SUMS.txt             "$WINDOWS_SIGNING"             --target "${GITHUB_SHA}"             --title "TerraSatch Edge $TAG"             --notes "$NOTES"
+          gh release create "$TAG"             "$WINDOWS"             "$LINUX"             release-assets/SHA256SUMS.txt             "$WINDOWS_SIGNING"             --target "${GITHUB_SHA}"             --title "TerraSatch Edge $TAG"             --notes "$NOTES"             $RELEASE_FLAG
