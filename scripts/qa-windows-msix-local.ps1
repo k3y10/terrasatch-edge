@@ -32,6 +32,13 @@ $VerifyManifest = Join-Path $ReleaseDir "msix-verify\AppxManifest.xml"
 
 $QaStateRoot = Join-Path $env:TEMP ("terrasatch-edge-qa-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force $QaStateRoot | Out-Null
+
+$PreviousApiUrl = $env:TERRASATCH_EDGE_API_URL
+$PreviousApiKey = $env:TERRASATCH_EDGE_API_KEY
+$PreviousConfigDir = $env:TERRASATCH_EDGE_CONFIG_DIR
+$PreviousStateDir = $env:TERRASATCH_EDGE_STATE_DIR
+$PreviousMsixThumbprint = $env:TERRASATCH_MSIX_CERT_THUMBPRINT
+
 $env:TERRASATCH_EDGE_API_URL = "http://127.0.0.1:18000"
 Remove-Item Env:TERRASATCH_EDGE_API_KEY -ErrorAction SilentlyContinue
 $env:TERRASATCH_EDGE_CONFIG_DIR = Join-Path $QaStateRoot "config"
@@ -59,9 +66,13 @@ function Resolve-SignTool {
 }
 
 try {
-    Write-Host "[1/7] Checking working tree whitespace" -ForegroundColor Cyan
-    git diff --check
-    if ($LASTEXITCODE -ne 0) { throw "git diff --check failed." }
+    Write-Host "[1/7] Checking pull-request diff whitespace" -ForegroundColor Cyan
+    $MergeBase = (git merge-base HEAD origin/main).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $MergeBase) {
+        throw "Could not resolve merge-base with origin/main. Run 'git fetch origin main' and retry."
+    }
+    git diff --check "$MergeBase...HEAD"
+    if ($LASTEXITCODE -ne 0) { throw "git diff --check failed for the branch diff." }
 
     if (-not $SkipRtlSdrStage) {
         Write-Host "[2/7] Staging and validating RTL-SDR runtime" -ForegroundColor Cyan
@@ -120,6 +131,12 @@ try {
     if ($Identity.Name -ne "TerraSatch.Edge.Dev") { throw "Unexpected local QA identity: $($Identity.Name)" }
     if ($Identity.Publisher -ne "CN=TerraSatch Inc.") { throw "Unexpected local QA publisher: $($Identity.Publisher)" }
 
+    $RuntimeVersionParts = @($Version.Split(".") | ForEach-Object { [int]$_ })
+    $ExpectedMsixVersion = "$($RuntimeVersionParts[0] + 1).$($RuntimeVersionParts[1]).$($RuntimeVersionParts[2]).0"
+    if ($Identity.Version -ne $ExpectedMsixVersion) {
+        throw "Unexpected MSIX package version: $($Identity.Version). Expected $ExpectedMsixVersion for Edge $Version."
+    }
+
     $Startup = $Manifest.SelectNodes("//desktop:Extension[@Category='windows.startupTask']/desktop:StartupTask", $Ns)
     if ($Startup.Count -ne 2) { throw "Expected two startup tasks; found $($Startup.Count)." }
     $EdgeTask = @($Startup | Where-Object { $_.TaskId -eq "TerraSatchEdgeAgent" })
@@ -156,7 +173,21 @@ try {
     }
 }
 finally {
-    Remove-Item Env:TERRASATCH_MSIX_CERT_THUMBPRINT -ErrorAction SilentlyContinue
+    if ($null -eq $PreviousApiUrl) { Remove-Item Env:TERRASATCH_EDGE_API_URL -ErrorAction SilentlyContinue }
+    else { $env:TERRASATCH_EDGE_API_URL = $PreviousApiUrl }
+
+    if ($null -eq $PreviousApiKey) { Remove-Item Env:TERRASATCH_EDGE_API_KEY -ErrorAction SilentlyContinue }
+    else { $env:TERRASATCH_EDGE_API_KEY = $PreviousApiKey }
+
+    if ($null -eq $PreviousConfigDir) { Remove-Item Env:TERRASATCH_EDGE_CONFIG_DIR -ErrorAction SilentlyContinue }
+    else { $env:TERRASATCH_EDGE_CONFIG_DIR = $PreviousConfigDir }
+
+    if ($null -eq $PreviousStateDir) { Remove-Item Env:TERRASATCH_EDGE_STATE_DIR -ErrorAction SilentlyContinue }
+    else { $env:TERRASATCH_EDGE_STATE_DIR = $PreviousStateDir }
+
+    if ($null -eq $PreviousMsixThumbprint) { Remove-Item Env:TERRASATCH_MSIX_CERT_THUMBPRINT -ErrorAction SilentlyContinue }
+    else { $env:TERRASATCH_MSIX_CERT_THUMBPRINT = $PreviousMsixThumbprint }
+
     Remove-Item -LiteralPath $QaStateRoot -Recurse -Force -ErrorAction SilentlyContinue
 
     if (-not $KeepCertificate) {
