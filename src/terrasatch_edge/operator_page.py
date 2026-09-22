@@ -132,9 +132,9 @@ def render_operator_page(
     )
 
     setup_content = f"""
-    <div class="eyebrow">Satchy field gateway</div>
+    <div class="eyebrow">TerraSatch field runtime</div>
     <h1>Connect this Edge to TerraSatch</h1>
-    <p class="lead">Pair the gateway first. Then add phones, radios, Meshtastic, Garmin, or other field inputs without rebuilding the core setup.</p>
+    <p class="lead">Connect radios, SDRs, GPS, sensors, field computers, phones, and approved provider paths to TerraSatch without changing the tools crews already carry.</p>
     <ol class="setup-steps">{steps}</ol>
     """
 
@@ -218,7 +218,7 @@ def render_operator_page(
       <div class="section-head">
         <div>
           <div class="eyebrow">Phone in the field</div>
-          <h2 id="mobileFlowTitle">Capture once. Share the same Satchy context.</h2>
+          <h2 id="mobileFlowTitle">Keep field observations in the same operational context.</h2>
         </div>
         <span class="status status-good">Workspace ready</span>
       </div>
@@ -241,7 +241,7 @@ def render_operator_page(
       <div class="sequence" aria-label="Recommended setup sequence">
         <span class="sequence-done">1 Workspace paired</span>
         <b>→</b>
-        <span>2 Connect field inputs</span>
+        <span>2 Connect field sources</span>
         <b>→</b>
         <span>3 Verify the signal path</span>
       </div>
@@ -252,9 +252,9 @@ def render_operator_page(
         <b>→</b>
         <span class="path-node path-satchy">Satchy</span>
         <b>→</b>
-        <span class="path-node">TerraSatch intelligence</span>
+        <span class="path-node">Shared operational context</span>
       </div>
-      <p class="path-note">Local radios, SDRs, sensors, and supported adapters use this Edge gateway. Mobile and provider integrations may send directly to the same TerraSatch workspace and still become available to Satchy.</p>
+      <p class="path-note">Satchy turns field signals into shared operational context while preserving where each piece of information came from. Local radios, SDRs, sensors, and supported adapters use this Edge gateway; mobile and provider integrations may send directly to the same TerraSatch workspace. Consequential outputs remain traceable and human-reviewed.</p>
       <div class="connection-grid">{connection_cards}</div>
     </section>
     <div class="finish-actions">
