@@ -161,17 +161,17 @@ if (-not $env:TERRASATCH_EDGE_ICON) {
     Remove-Item $IconBuilderPath -Force -ErrorAction SilentlyContinue
 
     if ($SatchySource -match '^https?://') {
-        Write-Host "Downloading approved Satchy artwork: $SatchySource"
+        Write-Host "Downloading approved TerraSatch logo artwork: $SatchySource"
         Invoke-WebRequest -Uri $SatchySource -OutFile $IconSource
     } elseif (Test-Path $SatchySource) {
         Copy-Item (Resolve-Path $SatchySource).Path $IconSource -Force
-        Write-Host "Using local Satchy artwork: $SatchySource"
+        Write-Host "Using local TerraSatch logo artwork: $SatchySource"
     } else {
-        throw "Satchy icon source was not found: $SatchySource"
+        throw "TerraSatch icon source was not found: $SatchySource"
     }
 
     if (-not (Test-Path $IconSource) -or (Get-Item $IconSource).Length -le 0) {
-        throw "Satchy artwork could not be staged from: $SatchySource"
+        throw "TerraSatch logo artwork could not be staged from: $SatchySource"
     }
 
     $IconBuilder = @'
@@ -208,7 +208,7 @@ canvas.save(
     try {
         & $Python $IconBuilderPath $IconSource $IconFile
         if ($LASTEXITCODE -ne 0) {
-            throw "Satchy icon conversion failed with exit code $LASTEXITCODE."
+            throw "TerraSatch icon conversion failed with exit code $LASTEXITCODE."
         }
     } finally {
         Remove-Item $IconBuilderPath -Force -ErrorAction SilentlyContinue
@@ -216,17 +216,17 @@ canvas.save(
     }
 
     if (-not (Test-Path $IconFile)) {
-        throw "TerraSatchEdge.ico was not created. Branded Windows release builds require the Satchy icon."
+        throw "TerraSatchEdge.ico was not created. Branded Windows release builds require the TerraSatch icon."
     }
     if ((Get-Item $IconFile).Length -le 0) {
         throw "TerraSatchEdge.ico is empty. Branded Windows release builds require a valid icon."
     }
 
-    Write-Host "Generated TerraSatch Edge Satchy icon: $IconFile" -ForegroundColor Green
+    Write-Host "Generated TerraSatch Edge TerraSatch icon: $IconFile" -ForegroundColor Green
 }
 
 if (-not (Test-Path $IconFile)) {
-    throw "TerraSatchEdge.ico was not created. Branded Windows release builds require the Satchy icon."
+    throw "TerraSatchEdge.ico was not created. Branded Windows release builds require the TerraSatch icon."
 }
 if ((Get-Item $IconFile).Length -le 0) {
     throw "TerraSatchEdge.ico is empty. Branded Windows release builds require a valid icon."
@@ -258,7 +258,7 @@ $PyInstallerArgs = @(
     "--collect-all", "uvicorn",
     "--collect-all", "fastapi"
 )
-Write-Host "Using TerraSatch Edge Satchy icon: $IconFile" -ForegroundColor Green
+Write-Host "Using TerraSatch Edge TerraSatch icon: $IconFile" -ForegroundColor Green
 $PyInstallerArgs += "packaging\entrypoints\edge_cli.py"
 & $Python -m PyInstaller @PyInstallerArgs
 if ($LASTEXITCODE -ne 0) {
