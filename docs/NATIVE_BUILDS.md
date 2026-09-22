@@ -2,7 +2,27 @@
 
 TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
 
-Current development package version: **0.2.4**. RX candidate builds remain in pilot status until a trusted-signed Windows artifact and native field installations pass the release gate.
+Current development package version: **0.2.5**. Public Windows builds remain beta-gated until the exact installer is Authenticode-signed, timestamped, attested, and validated on a clean Windows target.
+
+## Current TerraSatch connection surface
+
+Edge remains the field-computer runtime rather than the full integration catalog. The current TerraSatch platform connects:
+
+- TerraSatch Edge for device pairing, heartbeat, hardware inventory, radio receive, and controlled Satchy commands;
+- native TerraSatch Mobile observations into the same canonical field-ingest pipeline;
+- Garmin inReach Portal Connect into that same pipeline when a partner-approved tenant is available;
+- 20 supported cloud/data/workflow providers in the TerraSatch API integration catalog;
+- TerraSatch Edge and Mapbox as TerraSatch-managed providers.
+
+Garmin remains partner-gated until live tenant acceptance. onX Backcountry, Gaia GPS, and AllTrails remain coming soon. Runtime readiness for supported third-party providers still depends on the required organization credentials or provider configuration.
+
+## Release trust
+
+Every public native artifact should have three independently useful trust signals:
+
+1. **SHA-256** — confirms the downloaded bytes match the published artifact.
+2. **GitHub build provenance** — ties those bytes to the TerraSatch Edge repository/workflow and source commit.
+3. **Windows Authenticode** — identifies the Windows publisher and provides the signature signal Windows uses for publisher trust. SHA-256 or provenance alone does not remove SmartScreen reputation warnings.
 
 ## Shared API contract
 
@@ -40,8 +60,8 @@ The build runs the Python test suite, creates a PyInstaller runtime, installs a 
 Expected artifact names:
 
 ```text
-release/terrasatch-edge_0.2.2_amd64.deb
-release/terrasatch-edge_0.2.2_arm64.deb
+release/terrasatch-edge_0.2.5_amd64.deb
+release/terrasatch-edge_0.2.5_arm64.deb
 ```
 
 The package uses shared system paths so the CLI and background service see the same registration:
@@ -85,8 +105,8 @@ Supported public pilot architectures:
 Expected artifact names:
 
 ```text
-release/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
-release/TerraSatch-Edge-0.2.2-macOS-x64.pkg
+release/TerraSatch-Edge-0.2.5-macOS-arm64.pkg
+release/TerraSatch-Edge-0.2.5-macOS-x64.pkg
 ```
 
 The package installs a `LaunchDaemon` (`com.terrasatch.edge`) and uses shared system state under:
@@ -144,8 +164,11 @@ For every new artifact:
 10. Test actual RTL receive when shipping RTL-SDR support.
 11. Upload the exact tested artifact to the TerraSatch public release store.
 12. Publish that exact URL + SHA-256 on `www.terrasatch.com/downloads`.
+13. Verify the GitHub build-provenance attestation for the downloaded artifact:
+   `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`.
+14. On Windows, verify the installer signature with `Get-AuthenticodeSignature` and confirm the signer is the expected TerraSatch certificate before treating the artifact as a trusted public build.
 
-Native builds are intentionally manual for the pilot; no GitHub Actions workflow is required.
+The public release workflow is manual-only. It produces SHA-256 checksums and GitHub build-provenance attestations, refuses to overwrite an existing release tag, and requires Windows Authenticode signing unless an operator explicitly chooses an unsigned beta build.
 
 
 ## Independent native radio services
