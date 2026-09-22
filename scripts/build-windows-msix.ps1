@@ -49,7 +49,8 @@ function Invoke-PyInstaller {
         [Parameter(Mandatory = $true)][string]$DistPath,
         [Parameter(Mandatory = $true)][string]$WorkPath,
         [Parameter(Mandatory = $true)][string]$SpecPath,
-        [switch]$OneFile
+        [switch]$OneFile,
+        [switch]$FullRuntime
     )
     $Arguments = @(
         "--noconfirm",
@@ -57,14 +58,18 @@ function Invoke-PyInstaller {
         $(if ($OneFile) { "--onefile" } else { "--onedir" }),
         "--name", $Name,
         "--icon", $script:IconFile,
-        "--collect-data", "terrasatch_edge",
-        "--collect-all", "uvicorn",
-        "--collect-all", "fastapi",
         "--distpath", $DistPath,
         "--workpath", $WorkPath,
-        "--specpath", $SpecPath,
-        $EntryPoint
+        "--specpath", $SpecPath
     )
+    if ($FullRuntime) {
+        $Arguments += @(
+            "--collect-data", "terrasatch_edge",
+            "--collect-all", "uvicorn",
+            "--collect-all", "fastapi"
+        )
+    }
+    $Arguments += $EntryPoint
     & $script:Python -m PyInstaller @Arguments
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed for $Name with exit code $LASTEXITCODE." }
 }
@@ -157,7 +162,8 @@ Invoke-PyInstaller `
     -EntryPoint (Join-Path $Root "packaging\entrypoints\edge_cli.py") `
     -DistPath $RuntimeDist `
     -WorkPath $RuntimeBuild `
-    -SpecPath $RuntimeSpec
+    -SpecPath $RuntimeSpec `
+    -FullRuntime
 
 $RuntimeDir = Join-Path $RuntimeDist "TerraSatchEdge"
 if (-not (Test-Path -LiteralPath (Join-Path $RuntimeDir "TerraSatchEdge.exe"))) { throw "MSIX runtime executable was not built." }
