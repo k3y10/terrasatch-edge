@@ -132,4 +132,9 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "Edge when local" in operator_page
     assert "Signal path" in operator_page
     assert "Current result: architecture is reserved" in operator_page
+    assert "Pair with phone or browser" in operator_page
+    assert "qr_data_uri" in (ROOT / "src" / "terrasatch_edge" / "local_ui.py").read_text(encoding="utf-8")
+    assert "Capture once. Share the same Satchy context." in operator_page
+    assert "Arbitrary SMS/iMessage/third-party chat ingestion" in operator_page
+    assert "binary media upload" in operator_page
     assert "Scan local hardware" in operator_page
