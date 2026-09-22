@@ -2,7 +2,7 @@
 
 TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
 
-Current development package version: **0.2.5**. Public Windows builds remain beta-gated until the exact installer is Authenticode-signed, timestamped, attested, and validated on a clean Windows target.
+Current development package version: **0.2.5**. The primary no-cost public Windows path is Microsoft Store MSIX. Direct `.exe` builds remain beta/compatibility artifacts unless separately trusted-signed.
 
 ## Current TerraSatch connection surface
 
@@ -22,7 +22,7 @@ Every public native artifact should have three independently useful trust signal
 
 1. **SHA-256** — confirms the downloaded bytes match the published artifact.
 2. **GitHub build provenance** — ties those bytes to the TerraSatch Edge repository/workflow and source commit.
-3. **Windows Authenticode** — identifies the Windows publisher and provides the signature signal Windows uses for publisher trust. SHA-256 or provenance alone does not remove SmartScreen reputation warnings.
+3. **Windows package trust** — for the primary free route, Microsoft Store signs the certified MSIX package. Direct `.exe` downloads still require separate Authenticode signing if TerraSatch wants them to present as a trusted publisher.
 
 ## Shared API contract
 
@@ -41,6 +41,51 @@ Hardware discovery is intentionally separate from provider readiness:
 - RTL-SDR / Nooelec is reported as `radio:receive` + `audio:capture` only when the RTL receive runtime is complete (`rtl_test` and `rtl_fm`).
 - HackRF discovery is reported as `hardware:hackrf`; it does **not** report RX/TX until a TerraListen provider adapter actually implements those operations.
 - TX remains off by default and provider-gated by the API.
+
+## Windows — Microsoft Store MSIX
+
+The primary public Windows distribution path is the no-cost Microsoft Store MSIX route. The package preserves the existing Edge runtime and declares two packaged services:
+
+- `TerraSatchEdge` — automatic LocalSystem service for heartbeat, inventory, configuration, and Satchy control;
+- `TerraSatchRadio` — manual LocalSystem receive-only radio service.
+
+For local development testing with a self-signed TerraSatch code-signing certificate already installed in the Personal certificate store:
+
+```powershell
+$env:TERRASATCH_MSIX_CERT_THUMBPRINT = "<development certificate thumbprint>"
+.\scripts\build-windows-msix.ps1
+```
+
+The development package defaults to:
+
+```text
+Identity Name: TerraSatch.Edge.Dev
+Publisher: CN=TerraSatch Inc.
+Artifact: release\TerraSatch-Edge_0.2.5_x64.msix
+```
+
+The manifest Publisher must exactly match the subject of the certificate used for a local test package.
+
+To test installation of a CI/local development package from an elevated PowerShell session:
+
+```powershell
+.\scripts\install-windows-msix-dev.ps1 `
+  -MsixPath ".\release\TerraSatch-Edge_0.2.5_x64.msix" `
+  -CertificatePath ".\release\TerraSatch-MSIX-Dev.cer"
+```
+
+For Microsoft Store submission, first reserve the product name and copy the exact identity values from Partner Center. Then build:
+
+```powershell
+$env:TERRASATCH_MSIX_IDENTITY_NAME = "<Partner Center Package/Identity/Name>"
+$env:TERRASATCH_MSIX_PUBLISHER = "<Partner Center Package/Identity/Publisher>"
+$env:TERRASATCH_MSIX_PUBLISHER_DISPLAY_NAME = "TerraSatch Inc."
+.\scripts\build-windows-msix.ps1 -StoreUpload
+```
+
+`-StoreUpload` intentionally leaves the package unsigned locally. The Microsoft Store applies the production package signature after certification. The package requests `runFullTrust` and the restricted `packagedServices` capability; public Store distribution depends on Microsoft certification/approval of those declarations.
+
+The existing Inno Setup `.exe` build remains available as a controlled compatibility lane and should remain labeled beta/unsigned unless TerraSatch later adds a separate trusted-signing provider.
 
 ## Linux — Debian / Ubuntu
 
@@ -166,9 +211,9 @@ For every new artifact:
 12. Publish that exact URL + SHA-256 on `www.terrasatch.com/downloads`.
 13. Verify the GitHub build-provenance attestation for the downloaded artifact:
    `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`.
-14. On Windows, verify the installer signature with `Get-AuthenticodeSignature` and confirm the signer is the expected TerraSatch certificate before treating the artifact as a trusted public build.
+14. On Windows, verify the chosen distribution path: Store MSIX packages must be Store-certified/Microsoft-signed; direct `.exe` artifacts must remain beta unless separately Authenticode-signed.
 
-The public release workflow is manual-only. It produces SHA-256 checksums and GitHub build-provenance attestations, refuses to overwrite an existing release tag, and requires Windows Authenticode signing unless an operator explicitly chooses an unsigned beta build.
+The direct-download public release workflow remains manual-only and immutable. The Microsoft Store MSIX path is built separately so Store identity/certification can remain distinct from GitHub compatibility releases.
 
 
 ## Independent native radio services
