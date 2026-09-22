@@ -6,13 +6,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "Run this development install test from an elevated PowerShell session. Elevation is only needed to trust the temporary test certificate in LocalMachine\TrustedPeople."
+}
+
 $MsixPath = (Resolve-Path -LiteralPath $MsixPath).Path
 $CertificatePath = (Resolve-Path -LiteralPath $CertificatePath).Path
 
-Write-Host "Trusting the temporary TerraSatch development certificate for this Windows user" -ForegroundColor Cyan
+Write-Host "Trusting the temporary TerraSatch development certificate in LocalMachine\\TrustedPeople" -ForegroundColor Cyan
 $imported = Import-Certificate `
     -FilePath $CertificatePath `
-    -CertStoreLocation "Cert:\CurrentUser\TrustedPeople"
+    -CertStoreLocation "Cert:\LocalMachine\TrustedPeople"
 if (-not $imported) { throw "Development certificate import failed." }
 
 Write-Host "Installing $MsixPath" -ForegroundColor Cyan
@@ -51,5 +57,5 @@ Write-Host "State is per-user under: $env:LOCALAPPDATA\TerraSatch\Edge"
 Write-Host ""
 Write-Host "After testing, uninstall with:" -ForegroundColor Yellow
 Write-Host "  Get-AppxPackage -Name $IdentityName | Remove-AppxPackage"
-Write-Host "Then remove the temporary development certificate from CurrentUser\TrustedPeople by thumbprint: $($imported.Thumbprint)"
+Write-Host "Then remove the temporary development certificate from LocalMachine\TrustedPeople by thumbprint: $($imported.Thumbprint)"
 
