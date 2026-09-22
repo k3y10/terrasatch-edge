@@ -55,7 +55,7 @@ For each exact artifact:
 4. Pair once and record the Device ID/site.
 5. Confirm the background service picks up registration and sends heartbeats.
 6. Restart/reboot and confirm registration persists.
-7. For the Microsoft Store path, build and locally validate the MSIX package and confirm the manifest uses the exact Partner Center identity before submission.
+7. For the Microsoft Store path, build and locally validate the MSIX package, confirm the manifest uses the exact Partner Center identity, and confirm it declares startup tasks rather than packaged Windows services.
 8. For any direct `.exe` compatibility artifact, keep it labeled beta/unsigned unless it has a separately trusted Authenticode signature.
 9. Record SHA-256 from the exact artifact that passed validation.
 10. Verify the GitHub build-provenance attestation for direct GitHub artifacts with `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`.
@@ -107,7 +107,7 @@ Copy `Identity Name` and `Publisher` exactly from Partner Center after reserving
 .\scripts\build-windows-msix.ps1 -StoreUpload
 ```
 
-The Store-upload MSIX is intentionally unsigned locally. Microsoft Store applies the production package signature after certification. The manifest requests the restricted `packagedServices` capability because TerraSatch Edge and TerraSatch Radio are registered as packaged Windows services.
+The Store-upload MSIX is intentionally unsigned locally. Microsoft Store applies the production package signature after certification. The package uses per-user `windows.startupTask` extensions for the Edge agent and optional radio monitor and must not declare `packagedServices` or `localSystemServices`.
 
 The existing PFX/Authenticode release path is optional only for a future separately signed direct-download `.exe` lane; it is not required for the free Microsoft Store route.
 
@@ -121,7 +121,7 @@ From a clean browser/session:
 4. Confirm SHA-256 matches the validated local artifact.
 5. Verify the GitHub attestation for direct GitHub artifacts.
 6. For the Store route, install the Microsoft Store-certified MSIX and confirm Windows reports the expected trusted package publisher.
-7. Confirm both packaged services register correctly and the operator console launches.
+7. Confirm the operator console launches, the Edge startup task is enabled by default after first launch, and the radio startup task remains disabled until explicitly enabled.
 8. Confirm `--version`, setup/pairing, `status`, service heartbeat, and radio-service behavior on the clean target.
 
 Only then treat the native artifact as publicly released.
