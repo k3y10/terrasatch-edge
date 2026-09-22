@@ -87,3 +87,33 @@ def test_edge_env_example_points_at_production_https() -> None:
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
 
     assert "TERRASATCH_EDGE_API_URL=https://api.terrasatch.com" in text
+
+
+def test_store_msix_uses_satchy_branding_and_startup_tasks() -> None:
+    manifest = (
+        ROOT / "packaging" / "windows" / "msix" / "AppxManifest.template.xml"
+    ).read_text(encoding="utf-8")
+    build_script = (ROOT / "scripts" / "build-windows-msix.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'Category="windows.startupTask"' in manifest
+    assert 'TaskId="TerraSatchEdgeAgent"' in manifest
+    assert 'TaskId="TerraSatchRadio"' in manifest
+    assert 'Enabled="true"' in manifest
+    assert 'Enabled="false"' in manifest
+    assert "packagedServices" not in manifest
+    assert "localSystemServices" not in manifest
+    assert "terrasatch-logo.webp" in build_script
+    assert '"#111317"' in build_script
+    assert '"#f2960d"' in build_script
+
+
+def test_operator_console_uses_current_dark_amber_brand_tokens() -> None:
+    operator_page = (ROOT / "src" / "terrasatch_edge" / "operator_page.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--bg:#111317" in operator_page
+    assert "--orange:#f2960d" in operator_page
+    assert "--green:" not in operator_page
