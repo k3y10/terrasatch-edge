@@ -6,8 +6,14 @@ on:
       msix_run_id:
         description: "Validated Windows MSIX QA run to publish"
         required: true
-        default: "35690817445"
+        default: "35692293668"
         type: string
+  push:
+    branches:
+      - feat/release-trust-connected-stack
+    paths:
+      - ".github/workflows/public-edge-release.yml"
+
 permissions:
   contents: write
   actions: read
@@ -15,9 +21,9 @@ permissions:
   attestations: write
 
 env:
-  VALIDATED_MSIX_RUN_ID: ${{ inputs.msix_run_id || '35690817445' }}
-  EXPECTED_MSIX_SHA256: "027c3da41582aee8cd44cd5122e0ea6d436d49b5c21453ea61d914d20205b154"
-  EXPECTED_CERT_SHA256: "56ad00a44a5ac0c9e07fc818e33c881de4c5e2d94d5a70a72c0d00b5083a51e6"
+  VALIDATED_MSIX_RUN_ID: ${{ inputs.msix_run_id || '35692293668' }}
+  EXPECTED_MSIX_SHA256: "34fbf1e8943cad452a01c7b7ae56f07fed5c4be5243b9c6d16c65849b0b911ab"
+  EXPECTED_CERT_SHA256: "61398cfbf45ee52e77dff0e392b05b2902fa7b19a8ce931740c45d6c91d9e15d"
 
 jobs:
   linux-amd64:
@@ -149,8 +155,8 @@ jobs:
           MSIX release. It is not the Microsoft Store production signature.
 
           Certificate subject: CN=TerraSatch Inc.
-          Certificate SHA-1 thumbprint: BFC10EF9555F44C1FE24D04388F0CCB7509E2AA0
-          Certificate valid through: 2026-09-29 05:29:00 UTC
+          Certificate SHA-1 thumbprint: 2B9ACCA401513722041596B9A9D6537056C726EC
+          Certificate valid through: 2026-09-29 05:51:11 UTC
           EOF
 
       - name: Publish immutable Edge prerelease
@@ -182,8 +188,8 @@ jobs:
           Windows trust:
           - The MSIX and certificate are the exact pair validated by Windows MSIX QA run ${VALIDATED_MSIX_RUN_ID}.
           - Certificate subject: CN=TerraSatch Inc.
-          - Certificate SHA-1 thumbprint: BFC10EF9555F44C1FE24D04388F0CCB7509E2AA0
-          - Certificate valid through September 29, 2026 05:29:00 UTC.
+          - Certificate SHA-1 thumbprint: 2B9ACCA401513722041596B9A9D6537056C726EC
+          - Certificate valid through September 29, 2026 05:51:11 UTC.
           - This is a development/test self-signed certificate, not Microsoft Store production signing.
           - No PFX/private key is published.
 
@@ -192,7 +198,7 @@ jobs:
           - Linux AMD64 package is built from this release source and carries GitHub build provenance.
           - SHA-256 values for all downloadable files are in SHA256SUMS.txt.
 
-          Edge ${VERSION} includes the TerraSatch FIELD INTELLIGENCE-aligned Satchy field-gateway UI, guided local/provider
+          Edge ${VERSION} uses the exact live TerraSatch production logo and Satchy Approved artwork, plus the FIELD INTELLIGENCE-aligned field-gateway UI, guided local/provider
           connection paths, secure short-lived QR workspace pairing, mobile field-capture guidance,
           and receive-side radio configuration.
 
