@@ -1,12 +1,9 @@
-name: Satchy Edge QA
+name: Satchy Edge QA (manual only)
 
+# Deliberately manual-only. TerraSatch Edge release-candidate validation is run
+# locally first so pushes and pull requests never consume GitHub Actions minutes.
 on:
-  push:
-    branches:
-      - feat/satchy-agent-context-missions
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
