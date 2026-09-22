@@ -161,12 +161,19 @@ def test_windows_msix_qa_is_local_first_and_actions_are_manual_only() -> None:
     workflow = (ROOT / ".github" / "workflows" / "windows-msix-qa.yml").read_text(
         encoding="utf-8"
     )
+    satchy_workflow = (ROOT / ".github" / "workflows" / "satchy-qa.yml").read_text(
+        encoding="utf-8"
+    )
     local_qa = (ROOT / "scripts" / "qa-windows-msix-local.ps1").read_text(
         encoding="utf-8"
     )
 
     assert "pull_request:" not in workflow
+    assert "push:" not in workflow
     assert "workflow_dispatch:" in workflow
+    assert "pull_request:" not in satchy_workflow
+    assert "push:" not in satchy_workflow
+    assert "workflow_dispatch:" in satchy_workflow
     assert '$env:GITHUB_ACTIONS -eq "true"' in local_qa
     assert "build-windows-msix.ps1" in local_qa
     assert "-m ruff check src tests" in local_qa
@@ -175,6 +182,17 @@ def test_windows_msix_qa_is_local_first_and_actions_are_manual_only() -> None:
     assert "$PreviousApiUrl" in local_qa
     assert "git merge-base HEAD origin/main" in local_qa
     assert "$ExpectedMsixVersion" in local_qa
+
+
+def test_windows_msix_build_script_has_one_complete_build_pipeline() -> None:
+    build_script = (ROOT / "scripts" / "build-windows-msix.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert build_script.count('Write-Host "[2/8] Building Edge runtime"') == 1
+    assert build_script.count('Write-Host "[8/8] Verifying package structure and checksum"') == 1
+    assert build_script.count("$VersionNumbers = @($VersionParts | ForEach-Object { [int]$_ })") == 1
+    assert "\n }).Count -ne 0) {" not in build_script
 
 
 def test_store_msix_requires_partner_identity_and_store_valid_version() -> None:
