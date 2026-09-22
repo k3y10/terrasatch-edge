@@ -1,33 +1,17 @@
-name: Public Edge Release (manual only)
+name: Public Edge Release (manual Linux only)
 
+# Deliberately manual-only. Windows Store packages are built/validated locally and
+# submitted through Partner Center; development-signed MSIX files are never public releases.
 on:
   workflow_dispatch:
-    inputs:
-      msix_run_id:
-        description: "Validated Windows MSIX QA run to publish"
-        required: true
-        type: string
-      expected_msix_sha256:
-        description: "SHA-256 of the exact validated MSIX"
-        required: true
-        type: string
-      expected_cert_sha256:
-        description: "SHA-256 of the exact validation certificate"
-        required: true
-        type: string
+
 permissions:
   contents: write
-  actions: read
   id-token: write
   attestations: write
 
-env:
-  VALIDATED_MSIX_RUN_ID: ${{ inputs.msix_run_id }}
-  EXPECTED_MSIX_SHA256: ${{ inputs.expected_msix_sha256 }}
-  EXPECTED_CERT_SHA256: ${{ inputs.expected_cert_sha256 }}
-
 jobs:
-  linux-amd64:
+  linux-amd64-release:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -53,113 +37,15 @@ jobs:
         with:
           subject-path: release/terrasatch-edge_${{ steps.version.outputs.version }}_amd64.deb
 
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: edge-linux-amd64
-          path: release/terrasatch-edge_${{ steps.version.outputs.version }}_amd64.deb
-          if-no-files-found: error
-
-  publish:
-    needs:
-      - linux-amd64
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Resolve Edge version
-        id: version
-        shell: bash
-        run: |
-          VERSION="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Download Linux artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: edge-linux-amd64
-          path: release-assets/linux
-
-      - name: Download exact validated Windows MSIX artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: terrasatch-edge-msix-dev
-          run-id: ${{ env.VALIDATED_MSIX_RUN_ID }}
-          github-token: ${{ github.token }}
-          path: release-assets/windows
-
-      - name: Verify Windows MSIX and certificate are the validated pair
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          MSIX="release-assets/windows/TerraSatch-Edge_${VERSION}_x64.msix"
-          CERT="release-assets/windows/TerraSatch-MSIX-Dev.cer"
-
-          test -f "$MSIX"
-          test -f "$CERT"
-
-          ACTUAL_MSIX_SHA="$(sha256sum "$MSIX" | awk '{print $1}')"
-          ACTUAL_CERT_SHA="$(sha256sum "$CERT" | awk '{print $1}')"
-
-          if [ "$ACTUAL_MSIX_SHA" != "$EXPECTED_MSIX_SHA256" ]; then
-            echo "Validated MSIX hash mismatch: $ACTUAL_MSIX_SHA" >&2
-            exit 1
-          fi
-          if [ "$ACTUAL_CERT_SHA" != "$EXPECTED_CERT_SHA256" ]; then
-            echo "Validated certificate hash mismatch: $ACTUAL_CERT_SHA" >&2
-            exit 1
-          fi
-
-          openssl x509 -inform DER -in "$CERT" -noout \
-            -subject -issuer -serial -dates -fingerprint -sha1 \
-            > release-assets/WINDOWS-MSIX-TRUST.txt
-
-          {
-            echo
-            echo "MSIX SHA256=$ACTUAL_MSIX_SHA"
-            echo "Certificate SHA256=$ACTUAL_CERT_SHA"
-            echo "Validated workflow run=https://github.com/k3y10/terrasatch-edge/actions/runs/${VALIDATED_MSIX_RUN_ID}"
-            echo "Trust lane=development/test self-signed certificate; Microsoft Store production signing is separate"
-          } >> release-assets/WINDOWS-MSIX-TRUST.txt
-
-      - name: Build release checksum manifest and install notes
+      - name: Build checksum manifest
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          MSIX="release-assets/windows/TerraSatch-Edge_${VERSION}_x64.msix"
-          CERT="release-assets/windows/TerraSatch-MSIX-Dev.cer"
-          LINUX="release-assets/linux/terrasatch-edge_${VERSION}_amd64.deb"
+          (cd release && sha256sum "terrasatch-edge_${VERSION}_amd64.deb" > SHA256SUMS.txt)
 
-          {
-            sha256sum "$MSIX" | sed 's#release-assets/windows/##'
-            sha256sum "$CERT" | sed 's#release-assets/windows/##'
-            sha256sum "$LINUX" | sed 's#release-assets/linux/##'
-          } > release-assets/SHA256SUMS.txt
-
-          cat > release-assets/WINDOWS-MSIX-INSTALL.txt <<EOF
-          TerraSatch Edge ${VERSION} Windows MSIX development/test install
-
-          1. Download both:
-             - TerraSatch-Edge_${VERSION}_x64.msix
-             - TerraSatch-MSIX-Dev.cer
-          2. Open PowerShell as Administrator.
-          3. Import the development certificate:
-             Import-Certificate -FilePath ".\\TerraSatch-MSIX-Dev.cer" -CertStoreLocation "Cert:\\LocalMachine\\TrustedPeople"
-          4. Install:
-             Add-AppxPackage -Path ".\\TerraSatch-Edge_${VERSION}_x64.msix"
-
-          This certificate is a development/test trust certificate for the exact validated
-          MSIX release. It is not the Microsoft Store production signature.
-
-          Certificate identity, thumbprint, and validity are recorded in WINDOWS-MSIX-TRUST.txt
-          from the exact certificate paired with this release.
-          EOF
-
-      - name: Publish immutable Edge prerelease
+      - name: Publish immutable Linux prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -167,9 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="v${VERSION}"
-          MSIX="release-assets/windows/TerraSatch-Edge_${VERSION}_x64.msix"
-          CERT="release-assets/windows/TerraSatch-MSIX-Dev.cer"
-          LINUX="release-assets/linux/terrasatch-edge_${VERSION}_amd64.deb"
+          LINUX="release/terrasatch-edge_${VERSION}_amd64.deb"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists. Refusing to overwrite immutable release assets." >&2
@@ -177,40 +61,25 @@ jobs:
           fi
 
           NOTES="$(cat <<EOF
-          TerraSatch Edge $TAG prerelease for the current Satchy field-gateway generation.
+          TerraSatch Edge $TAG prerelease.
 
-          Public beta downloads:
-          - Windows 10/11 x64 MSIX: TerraSatch-Edge_${VERSION}_x64.msix
-          - Windows development trust certificate: TerraSatch-MSIX-Dev.cer
+          Direct artifact:
           - Debian/Ubuntu AMD64: terrasatch-edge_${VERSION}_amd64.deb
           - SHA-256 manifest: SHA256SUMS.txt
 
-          Windows trust:
-          - The MSIX and certificate are the exact pair validated by Windows MSIX QA run ${VALIDATED_MSIX_RUN_ID}.
-          - Certificate identity, thumbprint, and validity are recorded from the exact validated certificate in WINDOWS-MSIX-TRUST.txt.
-          - This is a development/test self-signed certificate, not Microsoft Store production signing.
-          - No PFX/private key is published.
-
-          Validation:
-          - Windows MSIX build, Store-friendly manifest validation, and signature verification passed.
-          - Linux AMD64 package is built from this release source and carries GitHub build provenance.
-          - SHA-256 values for all downloadable files are in SHA256SUMS.txt.
-
-          Edge ${VERSION} uses the exact live TerraSatch production logo and Satchy Approved artwork, plus the FIELD INTELLIGENCE-aligned field-gateway UI, guided local/provider
-          connection paths, secure short-lived QR workspace pairing, mobile field-capture guidance,
-          and receive-side radio configuration.
+          Windows distribution:
+          - Microsoft Store MSIX is a separate Store-certified lane.
+          - No development certificate or development-signed MSIX is published here.
+          - Build Windows release candidates locally with scripts/qa-windows-msix-local.ps1.
+          - Build the Partner Center submission package locally with build-windows-msix.ps1 -StoreUpload after applying the exact reserved Store identity.
 
           Source commit: ${GITHUB_SHA}
           EOF
           )"
 
           gh release create "$TAG" \
-            "$MSIX" \
-            "$CERT" \
             "$LINUX" \
-            release-assets/SHA256SUMS.txt \
-            release-assets/WINDOWS-MSIX-TRUST.txt \
-            release-assets/WINDOWS-MSIX-INSTALL.txt \
+            release/SHA256SUMS.txt \
             --target "${GITHUB_SHA}" \
             --title "TerraSatch Edge $TAG beta" \
             --notes "$NOTES" \
