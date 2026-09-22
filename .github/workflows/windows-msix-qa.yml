@@ -1,0 +1,116 @@
+name: Windows MSIX QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/windows-msix-qa.yml"
+      - "packaging/entrypoints/edge_msix_console.py"
+      - "packaging/windows/msix/**"
+      - "packaging/windows/TerraSatchEdgeService.xml"
+      - "packaging/windows/TerraSatchRadioService.xml"
+      - "scripts/build-windows-msix.ps1"
+      - "scripts/build-windows.ps1"
+      - "scripts/stage-rtlsdr-windows.ps1"
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Create temporary MSIX development certificate
+        shell: powershell
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject "CN=TerraSatch Inc." `
+            -FriendlyName "TerraSatch Edge MSIX CI Development" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -KeyExportPolicy Exportable `
+            -KeyLength 3072 `
+            -HashAlgorithm SHA256 `
+            -NotAfter (Get-Date).AddDays(7)
+
+          New-Item -ItemType Directory -Force release | Out-Null
+          Export-Certificate `
+            -Cert $cert `
+            -FilePath "release\TerraSatch-MSIX-Dev.cer" | Out-Null
+          Import-Certificate `
+            -FilePath "release\TerraSatch-MSIX-Dev.cer" `
+            -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
+
+          "TERRASATCH_MSIX_CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File `
+            -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Stage RTL-SDR runtime
+        shell: powershell
+        run: ./scripts/stage-rtlsdr-windows.ps1
+
+      - name: Build development-signed MSIX
+        shell: powershell
+        run: ./scripts/build-windows-msix.ps1
+
+      - name: Validate MSIX manifest contract
+        shell: powershell
+        run: |
+          [xml]$manifest = Get-Content "release\msix-verify\AppxManifest.xml"
+          $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
+          $ns.AddNamespace("f", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
+          $ns.AddNamespace("desktop6", "http://schemas.microsoft.com/appx/manifest/desktop/windows10/6")
+          $ns.AddNamespace("rescap", "http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities")
+
+          $identity = $manifest.SelectSingleNode("/f:Package/f:Identity", $ns)
+          if ($identity.Name -ne "TerraSatch.Edge.Dev") { throw "Unexpected MSIX identity: $($identity.Name)" }
+          if ($identity.Publisher -ne "CN=TerraSatch Inc.") { throw "Unexpected MSIX publisher: $($identity.Publisher)" }
+
+          $services = $manifest.SelectNodes("//desktop6:Extension[@Category='windows.service']/desktop6:Service", $ns)
+          if ($services.Count -ne 2) { throw "Expected 2 packaged services, found $($services.Count)." }
+          $serviceNames = @($services | ForEach-Object { $_.Name })
+          if ("TerraSatchEdge" -notin $serviceNames) { throw "TerraSatchEdge packaged service missing." }
+          if ("TerraSatchRadio" -notin $serviceNames) { throw "TerraSatchRadio packaged service missing." }
+
+          $capabilities = @($manifest.SelectNodes("//rescap:Capability", $ns) | ForEach-Object { $_.Name })
+          if ("runFullTrust" -notin $capabilities) { throw "runFullTrust capability missing." }
+          if ("packagedServices" -notin $capabilities) { throw "packagedServices capability missing." }
+
+      - name: Verify MSIX signature
+        shell: powershell
+        run: |
+          $signTool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Filter signtool.exe -Recurse -ErrorAction Stop |
+            Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          & $signTool.FullName verify /pa /v "release\TerraSatch-Edge_0.2.5_x64.msix"
+          if ($LASTEXITCODE -ne 0) { throw "MSIX signature verification failed." }
+
+      - name: Upload MSIX test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terrasatch-edge-msix-dev
+          path: |
+            release/TerraSatch-Edge_0.2.5_x64.msix
+            release/TerraSatch-MSIX-Dev.cer
+          if-no-files-found: error
+          retention-days: 7
