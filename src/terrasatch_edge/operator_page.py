@@ -275,7 +275,7 @@ def render_operator_page(
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TerraSatch Edge</title>
 <style>
-:root{{color-scheme:dark;--bg:#111317;--surface:#181b20;--surface2:#1f2329;--surface3:#15171b;--line:#30343b;--soft:#252a31;--text:#ebe8e2;--muted:#8e949d;--orange:#f2960d;--orange-hover:#ffab2e;--positive:#42d17b;--amber:#f2a51a;--red:#ff625c;--neutral:#9aa2ad;--ui:"Barlow","Segoe UI",system-ui,sans-serif;--display:"Rajdhani","Bahnschrift SemiCondensed","Arial Narrow","Segoe UI",sans-serif;--mono:"JetBrains Mono","Cascadia Mono",Consolas,monospace;--radius:12px}}
+:root{{color-scheme:dark;--bg:#111317;--surface:#1b1d22;--surface2:#292c32;--surface3:#0d0e12;--line:#2e3138;--soft:#25272d;--text:#e9e7e2;--muted:#838995;--orange:#f2960d;--orange-hover:#ffab2e;--positive:#42d17b;--amber:#f2a51a;--red:#ff625c;--neutral:#9aa2ad;--ui:"Barlow","Segoe UI",system-ui,sans-serif;--display:"Rajdhani","Bahnschrift SemiCondensed","Arial Narrow","Segoe UI",sans-serif;--mono:"JetBrains Mono","Cascadia Mono",Consolas,monospace;--radius:12px}}
 *{{box-sizing:border-box}}html{{background:var(--bg)}}body{{min-width:320px;min-height:100vh;margin:0;background:linear-gradient(rgba(242,150,13,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(242,150,13,.012) 1px,transparent 1px),var(--bg);background-size:56px 56px;color:var(--text);font:16px var(--ui)}}
 button,input,summary{{font:inherit}}button{{color:inherit}}button:focus-visible,input:focus-visible,summary:focus-visible{{outline:2px solid var(--orange);outline-offset:3px}}
 .shell{{min-height:100vh;max-width:1240px;margin:auto;padding:18px 28px 18px;display:flex;flex-direction:column}}
