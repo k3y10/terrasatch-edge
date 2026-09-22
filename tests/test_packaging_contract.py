@@ -172,6 +172,9 @@ def test_windows_msix_qa_is_local_first_and_actions_are_manual_only() -> None:
     assert "-m ruff check src tests" in local_qa
     assert "signtool.exe" in local_qa
     assert "Get-FileHash" in local_qa
+    assert "$PreviousApiUrl" in local_qa
+    assert "git merge-base HEAD origin/main" in local_qa
+    assert "$ExpectedMsixVersion" in local_qa
 
 
 def test_store_msix_requires_partner_identity_and_store_valid_version() -> None:
@@ -198,6 +201,6 @@ def test_release_docs_track_project_version_and_do_not_pin_old_msix_qa_artifacts
     assert f"Current source milestone: **v{version} " in readme
     assert f"Current development package version: **{version}**" in native
     assert "35692293668" not in release_workflow
-    assert "34fbf1e8943cad452a01c7b7ae56f07f" not in release_workflow
-    assert "expected_msix_sha256" in release_workflow
-    assert "expected_cert_sha256" in release_workflow
+    assert "TerraSatch-MSIX-Dev.cer" not in release_workflow
+    assert "development-signed MSIX is published" not in release_workflow
+    assert "manual Linux only" in release_workflow
