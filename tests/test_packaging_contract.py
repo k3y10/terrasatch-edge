@@ -202,5 +202,5 @@ def test_release_docs_track_project_version_and_do_not_pin_old_msix_qa_artifacts
     assert f"Current development package version: **{version}**" in native
     assert "35692293668" not in release_workflow
     assert "TerraSatch-MSIX-Dev.cer" not in release_workflow
-    assert "development-signed MSIX is published" not in release_workflow
+    assert "release-assets/windows" not in release_workflow
     assert "manual Linux only" in release_workflow
