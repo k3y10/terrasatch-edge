@@ -41,7 +41,7 @@ def _header() -> None:
     console.print(
         Panel.fit(
             "[bold]TerraSatch Edge[/bold]\n[dim]LISTEN · WATCH · LEARN · ADAPT[/dim]",
-            border_style="green",
+            border_style="#f2960d",
         )
     )
 
