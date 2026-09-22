@@ -18,11 +18,11 @@ Garmin remains partner-gated until live tenant acceptance. onX Backcountry, Gaia
 
 ## Release trust
 
-Every public native artifact should have three independently useful trust signals:
+Use the trust signals appropriate to each distribution lane:
 
-1. **SHA-256** — confirms the downloaded bytes match the published artifact.
-2. **GitHub build provenance** — ties those bytes to the TerraSatch Edge repository/workflow and source commit.
-3. **Windows package trust** — for the primary free route, Microsoft Store signs the certified MSIX package. Direct `.exe` downloads still require separate Authenticode signing if TerraSatch wants them to present as a trusted publisher.
+1. **Direct GitHub/Linux artifacts** — publish SHA-256 and GitHub build provenance so the downloaded bytes can be tied to the release source.
+2. **Microsoft Store MSIX** — validate the local submission package before upload, then rely on Store certification plus the Microsoft-signed package identity/version for the customer-facing artifact. The Store replaces/re-signs the package signature during publishing, so the delivered Store package should not be expected to retain the local submission hash.
+3. **Direct Windows `.exe` compatibility artifacts** — require separate trusted Authenticode signing before presenting them as a trusted public-publisher download.
 
 ## Shared API contract
 
