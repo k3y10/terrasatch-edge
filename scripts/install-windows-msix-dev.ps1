@@ -2,8 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$MsixPath,
     [Parameter(Mandatory = $true)][string]$CertificatePath,
-    [string]$IdentityName = "TerraSatch.Edge.Dev",
-    [switch]$KeepTrustedCertificate
+    [string]$IdentityName = "TerraSatch.Edge.Dev"
 )
 
 $ErrorActionPreference = "Stop"
