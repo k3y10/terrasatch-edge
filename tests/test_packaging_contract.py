@@ -71,7 +71,8 @@ def test_windows_release_build_bundles_brand_assets_and_requires_trusted_signing
 
     assert (brand_dir / "terrasatch-logo.png").stat().st_size > 100_000
     assert (brand_dir / "satchy-approved-current.webp").stat().st_size > 5_000
-    assert (brand_dir / "terrasatch-black-logo.png").stat().st_size > 100_000
+    assert not (brand_dir / "terrasatch-logo.webp").exists()
+    assert not (brand_dir / "terrasatch-black-logo.png").exists()
     assert '"--collect-data", "terrasatch_edge"' in build_script
     assert "TERRASATCH_CODESIGN_CERT_THUMBPRINT" in build_script
     assert "[switch]$AllowUnsigned" in build_script
@@ -118,9 +119,9 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "--bg:#111317" in operator_page
     assert "--orange:#f2960d" in operator_page
     assert "--positive:#42d17b" in operator_page
-    assert "Satchy field gateway" in operator_page
+    assert "TerraSatch field runtime" in operator_page
     assert "Pair your workspace" in operator_page
-    assert "Connect field inputs" in operator_page
+    assert "Use what the field already uses" in operator_page
     assert "Phone / TerraSatch Mobile" in operator_page
     assert "Radio / SDR" in operator_page
     assert "Meshtastic / LoRa" in operator_page
@@ -135,7 +136,7 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "Current result: architecture is reserved" in operator_page
     assert "Pair with phone or browser" in operator_page
     assert "qr_data_uri" in (ROOT / "src" / "terrasatch_edge" / "local_ui.py").read_text(encoding="utf-8")
-    assert "Capture once. Share the same Satchy context." in operator_page
+    assert "Keep field observations in the same operational context." in operator_page
     assert "Arbitrary SMS/iMessage/third-party chat ingestion" in operator_page
     assert "binary media upload" in operator_page
     assert "Radio receive" in operator_page
@@ -144,4 +145,6 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "qrcode>=8,<9" in pyproject
     assert "/assets/terrasatch-logo.png" in operator_page
     assert "/assets/satchy-approved-current.webp" in operator_page
+    assert "Satchy turns field signals into shared operational context while preserving where each piece of information came from." in operator_page
+    assert "Consequential outputs remain traceable and human-reviewed." in operator_page
     assert "Scan local hardware" in operator_page
