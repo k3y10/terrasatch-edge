@@ -171,13 +171,6 @@ def build_app() -> Any:
             headers={"Cache-Control": "public, max-age=31536000, immutable"},
         )
 
-    @app.get("/assets/terrasatch-black-logo.png", include_in_schema=False)
-    def brand_lockup() -> Response:
-        return Response(
-            content=_brand_asset("terrasatch-black-logo.png"),
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=31536000, immutable"},
-        )
 
     def require_operator_header(
         x_terrasatch_edge_ui: str | None = Header(default=None),
