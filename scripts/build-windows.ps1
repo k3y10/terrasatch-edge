@@ -14,7 +14,7 @@ $Assets = Join-Path $Root "packaging\windows\assets"
 $IconFile = Join-Path $Assets "TerraSatchEdge.ico"
 $WinSW = Join-Path $Vendor "TerraSatchEdgeService.exe"
 $WinSWUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
-$DefaultSatchyIconSource = Join-Path $Root "src\terrasatch_edge\assets\terrasatch-logo.webp"
+$DefaultBrandIconSource = Join-Path $Root "src\terrasatch_edge\assets\terrasatch-logo.png"
 $CertificateThumbprint = ($env:TERRASATCH_CODESIGN_CERT_THUMBPRINT -replace '\s', '').ToUpperInvariant()
 $TimestampUrl = if ($env:TERRASATCH_CODESIGN_TIMESTAMP_URL) {
     $env:TERRASATCH_CODESIGN_TIMESTAMP_URL
@@ -150,28 +150,29 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not $env:TERRASATCH_EDGE_ICON) {
-    $SatchySource = $env:TERRASATCH_SATCHY_ICON_SOURCE
-    if (-not $SatchySource) {
-        $SatchySource = $DefaultSatchyIconSource
+    $BrandIconSource = $env:TERRASATCH_BRAND_ICON_SOURCE
+    if (-not $BrandIconSource) { $BrandIconSource = $env:TERRASATCH_SATCHY_ICON_SOURCE }
+    if (-not $BrandIconSource) {
+        $BrandIconSource = $DefaultBrandIconSource
     }
 
-    $IconSource = Join-Path $env:TEMP "TerraSatch-Satchy-icon-source.png"
+    $IconSource = Join-Path $env:TEMP "TerraSatch-brand-icon-source.png"
     $IconBuilderPath = Join-Path $env:TEMP "TerraSatch-build-satchy-icon.py"
     Remove-Item $IconSource -Force -ErrorAction SilentlyContinue
     Remove-Item $IconBuilderPath -Force -ErrorAction SilentlyContinue
 
-    if ($SatchySource -match '^https?://') {
-        Write-Host "Downloading approved TerraSatch logo artwork: $SatchySource"
-        Invoke-WebRequest -Uri $SatchySource -OutFile $IconSource
-    } elseif (Test-Path $SatchySource) {
-        Copy-Item (Resolve-Path $SatchySource).Path $IconSource -Force
-        Write-Host "Using local TerraSatch logo artwork: $SatchySource"
+    if ($BrandIconSource -match '^https?://') {
+        Write-Host "Downloading approved TerraSatch logo artwork: $BrandIconSource"
+        Invoke-WebRequest -Uri $BrandIconSource -OutFile $IconSource
+    } elseif (Test-Path $BrandIconSource) {
+        Copy-Item (Resolve-Path $BrandIconSource).Path $IconSource -Force
+        Write-Host "Using local TerraSatch logo artwork: $BrandIconSource"
     } else {
-        throw "TerraSatch icon source was not found: $SatchySource"
+        throw "TerraSatch icon source was not found: $BrandIconSource"
     }
 
     if (-not (Test-Path $IconSource) -or (Get-Item $IconSource).Length -le 0) {
-        throw "TerraSatch logo artwork could not be staged from: $SatchySource"
+        throw "TerraSatch logo artwork could not be staged from: $BrandIconSource"
     }
 
     $IconBuilder = @'
