@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import socket
 from dataclasses import asdict
+from io import BytesIO
 from functools import lru_cache
 from importlib.resources import files
 from typing import Any
@@ -48,6 +50,28 @@ class PairingClaimRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     device_code: str
+
+
+def _pairing_qr_data_uri(verification_url: str) -> str | None:
+    """Render the short-lived TerraSatch verification URL as an offline QR image."""
+    if not verification_url.startswith(("https://", "http://")):
+        return None
+    try:
+        import qrcode
+        from qrcode.image.svg import SvgPathImage
+    except ImportError:
+        return None
+
+    buffer = BytesIO()
+    image = qrcode.make(
+        verification_url,
+        image_factory=SvgPathImage,
+        box_size=8,
+        border=3,
+    )
+    image.save(buffer)
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/svg+xml;base64,{encoded}"
 
 
 def _status_payload() -> dict[str, Any]:
@@ -254,7 +278,10 @@ def build_app() -> Any:
             )
         except TerraSatchApiError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        return pairing.model_dump(mode="json")
+        payload = pairing.model_dump(mode="json")
+        payload["qr_data_uri"] = _pairing_qr_data_uri(pairing.verification_url)
+        payload["pairing_method"] = "qr_or_browser"
+        return payload
 
     @app.post("/api/pairing/claim")
     def claim_pairing(
