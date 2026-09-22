@@ -155,3 +155,20 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "Satchy turns field signals into shared operational context while preserving where each piece of information came from." in operator_page
     assert "Consequential outputs remain traceable and human-reviewed." in operator_page
     assert "Scan local hardware" in operator_page
+
+
+def test_windows_msix_qa_is_local_first_and_actions_are_manual_only() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "windows-msix-qa.yml").read_text(
+        encoding="utf-8"
+    )
+    local_qa = (ROOT / "scripts" / "qa-windows-msix-local.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "pull_request:" not in workflow
+    assert "workflow_dispatch:" in workflow
+    assert '$env:GITHUB_ACTIONS -eq "true"' in local_qa
+    assert "build-windows-msix.ps1" in local_qa
+    assert "-m ruff check src tests" in local_qa
+    assert "signtool.exe" in local_qa
+    assert "Get-FileHash" in local_qa
