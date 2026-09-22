@@ -155,7 +155,28 @@ $VersionParts = $Version.Split(".")
 if ($VersionParts.Count -ne 3 -and $VersionParts.Count -ne 4) {
     throw "MSIX requires a three- or four-part numeric TerraSatch version; received $Version."
 }
-if (@($VersionParts | Where-Object { $_ -notmatch '^\d+
+if (@($VersionParts | Where-Object { $_ -notmatch '^\d+$' }).Count -ne 0) {
+    throw "MSIX version components must be numeric; received $Version."
+}
+$VersionNumbers = @($VersionParts | ForEach-Object { [int]$_ })
+if (@($VersionNumbers | Where-Object { $_ -gt 65535 }).Count -ne 0) {
+    throw "MSIX version components must be <= 65535; received $Version."
+}
+
+# Microsoft Store package versions require a non-zero first component and reserve
+# the fourth component for Store use. Keep TerraSatch runtime/file SemVer unchanged
+# while mapping package identity versions monotonically: 0.2.8 -> 1.2.8.0,
+# 1.0.0 -> 2.0.0.0, and so on.
+$MsixMajor = $VersionNumbers[0] + 1
+if ($MsixMajor -gt 65535) { throw "MSIX mapped major version exceeds 65535." }
+$MsixMinor = $VersionNumbers[1]
+$MsixBuild = $VersionNumbers[2]
+$MsixRevision = if ($VersionNumbers.Count -eq 4) { $VersionNumbers[3] } else { 0 }
+if ($StoreUpload -and $MsixRevision -ne 0) {
+    throw "Microsoft Store upload packages require the fourth MSIX version component to be 0."
+}
+$MsixVersion = "$MsixMajor.$MsixMinor.$MsixBuild.$MsixRevision"
+
 $ReleaseDir = Join-Path $Root "release"
 $RuntimeDist = Join-Path $ReleaseDir "msix-runtime-dist"
 $RuntimeBuild = Join-Path $ReleaseDir "msix-runtime-build"
