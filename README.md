@@ -24,13 +24,13 @@ Third-party runtime readiness still depends on each organization's credentials, 
 
 ## Verify public downloads
 
-For every public Edge release, verify the exact downloaded artifact rather than trusting the filename alone:
+Verify each artifact using the trust signal for its distribution lane rather than trusting the filename alone:
 
-- compare its **SHA-256** with the release `SHA256SUMS.txt`;
-- verify its GitHub build provenance with `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`;
-- on Windows, verify **Authenticode** with `Get-AuthenticodeSignature` and confirm a valid expected TerraSatch signer before treating the installer as signed.
+- for direct GitHub/Linux artifacts, compare **SHA-256** with `SHA256SUMS.txt` and verify GitHub build provenance with `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`;
+- for Microsoft Store MSIX distribution, verify the installed package identity/version and the Microsoft Store-trusted signature rather than expecting its SHA-256 to match the locally submitted package;
+- for any separately distributed Windows `.exe`, verify **Authenticode** with `Get-AuthenticodeSignature` and confirm the expected trusted publisher before treating it as signed.
 
-SHA-256 confirms integrity and GitHub attestation confirms build provenance. Neither substitutes for Windows publisher signing or SmartScreen reputation.
+The Store re-signs MSIX packages after certification, so the Store-delivered bytes are a different trust boundary from the local submission package.
 
 ## Pilot architecture
 
