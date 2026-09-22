@@ -113,7 +113,7 @@ Copy `Identity Name` and `Publisher` exactly from Partner Center after reserving
 .\scripts\build-windows-msix.ps1 -StoreUpload
 ```
 
-The Store-upload MSIX is intentionally unsigned locally. Microsoft Store applies the production package signature after certification. The package uses per-user `windows.startupTask` extensions for the Edge agent and optional radio monitor and must not declare `packagedServices` or `localSystemServices`.
+The Store-upload MSIX is intentionally unsigned locally. Microsoft Store applies the production package signature after certification. The package uses per-user `windows.startupTask` extensions for the Edge agent and optional radio monitor and must not declare `packagedServices` or `localSystemServices`. Never publish the local QA certificate or a development-signed MSIX as the public Windows release; those artifacts exist only to validate packaging/install behavior before Store submission.
 
 The existing PFX/Authenticode release path is optional only for a future separately signed direct-download `.exe` lane; it is not required for the free Microsoft Store route.
 
