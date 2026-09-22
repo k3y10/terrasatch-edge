@@ -68,11 +68,11 @@ TX remains provider/hardware gated and must never be inferred from hardware disc
 Keep immutable versioned objects in the public release store. Recommended paths:
 
 ```text
-edge/windows/v0.2.5/TerraSatch-Edge-Setup-x64.exe
-edge/linux/v0.2.5/terrasatch-edge_0.2.5_amd64.deb
-edge/linux/v0.2.5/terrasatch-edge_0.2.5_arm64.deb
-edge/macos/v0.2.5/TerraSatch-Edge-0.2.5-macOS-arm64.pkg
-edge/macos/v0.2.5/TerraSatch-Edge-0.2.5-macOS-x64.pkg
+edge/windows/v<version>/TerraSatch-Edge-Setup-x64.exe
+edge/linux/v<version>/terrasatch-edge_<version>_amd64.deb
+edge/linux/v<version>/terrasatch-edge_<version>_arm64.deb
+edge/macos/v<version>/TerraSatch-Edge-<version>-macOS-arm64.pkg
+edge/macos/v<version>/TerraSatch-Edge-<version>-macOS-x64.pkg
 ```
 
 Never overwrite a validated versioned object with different bytes. Publish a new version/path instead.
@@ -101,7 +101,13 @@ TERRASATCH_MSIX_PUBLISHER
 TERRASATCH_MSIX_PUBLISHER_DISPLAY_NAME
 ```
 
-Copy `Identity Name` and `Publisher` exactly from Partner Center after reserving the TerraSatch Edge product. Build the submission package with:
+Run the normal Windows release-candidate QA locally first:
+
+```powershell
+.\scripts\qa-windows-msix-local.ps1
+```
+
+Copy `Identity Name` and `Publisher` exactly from Partner Center after reserving the TerraSatch Edge product. The Store build refuses the development identity and requires all three Partner Center identity values explicitly before it will package:
 
 ```powershell
 .\scripts\build-windows-msix.ps1 -StoreUpload
