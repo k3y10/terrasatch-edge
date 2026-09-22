@@ -233,8 +233,8 @@ def render_operator_page(
     <section class="connection-center" aria-labelledby="connectionsTitle">
       <div class="section-head">
         <div>
-          <div class="eyebrow">Connection center</div>
-          <h2 id="connectionsTitle">Connect field inputs</h2>
+          <div class="eyebrow">Sources</div>
+          <h2 id="connectionsTitle">Use what the field already uses</h2>
         </div>
         <button class="secondary-action" type="button" onclick="scanConnections(this)">Scan local hardware</button>
       </div>
