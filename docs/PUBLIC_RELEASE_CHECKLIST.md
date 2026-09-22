@@ -122,12 +122,11 @@ The existing PFX/Authenticode release path is optional only for a future separat
 From a clean browser/session:
 
 1. Open the TerraSatch downloads page.
-2. Confirm the intended platform button is enabled and points to the immutable versioned Blob object.
-3. Download the artifact through the public URL.
-4. Confirm SHA-256 matches the validated local artifact.
-5. Verify the GitHub attestation for direct GitHub artifacts.
-6. For the Store route, install the Microsoft Store-certified MSIX and confirm Windows reports the expected trusted package publisher.
-7. Confirm the operator console launches, the Edge startup task is enabled by default after first launch, and the radio startup task remains disabled until explicitly enabled.
-8. Confirm `--version`, setup/pairing, `status`, service heartbeat, and radio-service behavior on the clean target.
+2. Confirm the intended platform route is the one actually being released.
+3. For direct GitHub/Blob artifacts, download through the public URL and confirm SHA-256 matches the exact validated direct artifact.
+4. Verify the GitHub attestation for direct GitHub artifacts.
+5. For the Store route, install the Microsoft Store-certified MSIX and confirm Windows reports the expected package identity, package version, and trusted Microsoft Store signature. Do not require its SHA-256 to equal the locally submitted unsigned MSIX because Store publishing re-signs the package.
+6. Confirm the operator console launches, the Edge startup task is enabled by default after first launch, and the radio startup task remains disabled until explicitly enabled.
+7. Confirm `--version`, setup/pairing, `status`, service heartbeat, and radio-service behavior on the clean target.
 
 Only then treat the native artifact as publicly released.
