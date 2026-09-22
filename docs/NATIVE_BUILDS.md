@@ -44,10 +44,12 @@ Hardware discovery is intentionally separate from provider readiness:
 
 ## Windows — Microsoft Store MSIX
 
-The primary public Windows distribution path is the no-cost Microsoft Store MSIX route. The package preserves the existing Edge runtime and declares two packaged services:
+The primary public Windows distribution path is the no-cost Microsoft Store MSIX route. The Store package preserves the existing Edge runtime without declaring Windows services. Instead it packages two per-user startup tasks:
 
-- `TerraSatchEdge` — automatic LocalSystem service for heartbeat, inventory, configuration, and Satchy control;
-- `TerraSatchRadio` — manual LocalSystem receive-only radio service.
+- `TerraSatchEdgeAgent` — enabled by default after the first app launch for heartbeat, inventory, configuration, and Satchy control;
+- `TerraSatchRadio` — included but disabled by default until Edge is paired and an operator has configured a receive target.
+
+Both startup processes use the same per-user configuration/state root under `%LOCALAPPDATA%\TerraSatch\Edge`.
 
 For local development testing with a self-signed TerraSatch code-signing certificate already installed in the Personal certificate store:
 
@@ -66,7 +68,7 @@ Artifact: release\TerraSatch-Edge_0.2.5_x64.msix
 
 The manifest Publisher must exactly match the subject of the certificate used for a local test package.
 
-To test installation of a CI/local development package from an elevated PowerShell session:
+To test installation of a CI/local development package:
 
 ```powershell
 .\scripts\install-windows-msix-dev.ps1 `
@@ -83,7 +85,7 @@ $env:TERRASATCH_MSIX_PUBLISHER_DISPLAY_NAME = "TerraSatch Inc."
 .\scripts\build-windows-msix.ps1 -StoreUpload
 ```
 
-`-StoreUpload` intentionally leaves the package unsigned locally. The Microsoft Store applies the production package signature after certification. The package requests `runFullTrust` and the restricted `packagedServices` capability; public Store distribution depends on Microsoft certification/approval of those declarations.
+`-StoreUpload` intentionally leaves the package unsigned locally. The Microsoft Store applies the production package signature after certification. The package requests `runFullTrust`, which is required for the packaged desktop/full-trust runtime and must be explained during Store submission. It deliberately does not request `packagedServices` or `localSystemServices`, because Microsoft documents those service capabilities as generally unsuitable for Store submissions.
 
 The existing Inno Setup `.exe` build remains available as a controlled compatibility lane and should remain labeled beta/unsigned unless TerraSatch later adds a separate trusted-signing provider.
 
