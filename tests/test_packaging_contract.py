@@ -200,6 +200,28 @@ def test_windows_msix_build_script_has_one_complete_build_pipeline() -> None:
     assert "\n }).Count -ne 0) {" not in build_script
 
 
+def test_local_msix_signature_and_machine_trust_are_separate_gates() -> None:
+    build_script = (ROOT / "scripts" / "build-windows-msix.ps1").read_text(
+        encoding="utf-8"
+    )
+    local_qa = (ROOT / "scripts" / "qa-windows-msix-local.ps1").read_text(
+        encoding="utf-8"
+    )
+    install_script = (ROOT / "scripts" / "install-windows-msix-dev.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Get-AuthenticodeSignature -LiteralPath $Artifact" in build_script
+    assert "MSIX signer thumbprint does not match" in build_script
+    assert "& $SignTool verify /pa /v $Artifact" not in build_script
+    assert "Cert:\\CurrentUser\\TrustedPeople" not in local_qa
+    assert "Get-AuthenticodeSignature -LiteralPath $Artifact" in local_qa
+    assert "machine trust is deferred to -Install QA" in local_qa
+    assert 'Cert:\\LocalMachine\\TrustedPeople' in install_script
+    assert "Get-AuthenticodeSignature -LiteralPath $MsixPath" in install_script
+    assert 'Status.ToString() -ne "Valid"' in install_script
+
+
 def test_store_msix_requires_partner_identity_and_store_valid_version() -> None:
     build_script = (ROOT / "scripts" / "build-windows-msix.ps1").read_text(
         encoding="utf-8"
