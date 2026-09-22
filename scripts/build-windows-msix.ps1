@@ -102,9 +102,14 @@ alpha = image.getchannel("A")
 bbox = alpha.getbbox()
 if bbox:
     image = image.crop(bbox)
-canvas = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
-image.thumbnail((840, 840), Image.Resampling.LANCZOS)
-canvas.alpha_composite(image, ((1024 - image.width) // 2, (1024 - image.height) // 2))
+from PIL import ImageDraw
+
+canvas = Image.new("RGBA", (1024, 1024), "#111317")
+draw = ImageDraw.Draw(canvas)
+draw.rounded_rectangle((24, 24, 1000, 1000), radius=190, outline="#f2960d", width=28)
+image.thumbnail((800, 800), Image.Resampling.LANCZOS)
+canvas.alpha_composite(image, ((1024 - image.width) // 2, (1024 - image.height) // 2 - 8))
+draw.rounded_rectangle((126, 900, 898, 922), radius=11, fill="#f2960d")
 canvas.save(destination, format="ICO", sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
 '@
     Set-Content -LiteralPath $IconScript -Value $IconPython -Encoding UTF8
@@ -206,16 +211,37 @@ bbox = alpha.getbbox()
 if bbox:
     image = image.crop(bbox)
 
+from PIL import ImageDraw
+
 for filename, size in [
     ("StoreLogo.png", 50),
     ("Square44x44Logo.png", 44),
     ("Square150x150Logo.png", 150),
 ]:
-    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas = Image.new("RGBA", (size, size), "#111317")
+    draw = ImageDraw.Draw(canvas)
+    border = max(1, round(size * 0.035))
+    radius = max(4, round(size * 0.18))
+    inset = max(1, border)
+    draw.rounded_rectangle(
+        (inset, inset, size - inset - 1, size - inset - 1),
+        radius=radius,
+        outline="#f2960d",
+        width=border,
+    )
     working = image.copy()
-    padding = max(2, int(size * 0.08))
+    padding = max(4, int(size * 0.14))
     working.thumbnail((size - 2 * padding, size - 2 * padding), Image.Resampling.LANCZOS)
-    canvas.alpha_composite(working, ((size - working.width) // 2, (size - working.height) // 2))
+    y = (size - working.height) // 2 - max(0, round(size * 0.01))
+    canvas.alpha_composite(working, ((size - working.width) // 2, y))
+    line_h = max(1, round(size * 0.025))
+    line_w = round(size * 0.52)
+    line_y = size - max(4, round(size * 0.09))
+    draw.rounded_rectangle(
+        ((size - line_w) // 2, line_y, (size + line_w) // 2, line_y + line_h),
+        radius=max(1, line_h // 2),
+        fill="#f2960d",
+    )
     canvas.save(destination / filename, "PNG")
 '@
 Set-Content -LiteralPath $AssetScript -Value $AssetPython -Encoding UTF8
