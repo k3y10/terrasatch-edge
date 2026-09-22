@@ -182,6 +182,9 @@ def test_windows_msix_qa_is_local_first_and_actions_are_manual_only() -> None:
     assert "$PreviousApiUrl" in local_qa
     assert "git merge-base HEAD origin/main" in local_qa
     assert "$ExpectedMsixVersion" in local_qa
+    assert "[System.Management.Automation.Language.Parser]::ParseFile" in local_qa
+    assert "build-windows-msix.ps1" in local_qa
+    assert "install-windows-msix-dev.ps1" in local_qa
 
 
 def test_windows_msix_build_script_has_one_complete_build_pipeline() -> None:
