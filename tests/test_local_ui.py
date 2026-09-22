@@ -64,6 +64,10 @@ def test_config_update_preserves_pairing_assignment(tmp_path, monkeypatch):
             "node_name": "field-kit-07",
             "scan_interval_seconds": 45,
             "speech_model": "small.en",
+            "radio_profile": "bca-frs-na",
+            "radio_channel": 3,
+            "radio_squelch": 24,
+            "radio_auto_calibrate": False,
         },
     )
 
@@ -72,6 +76,10 @@ def test_config_update_preserves_pairing_assignment(tmp_path, monkeypatch):
     assert saved.node_name == "field-kit-07"
     assert saved.scan_interval_seconds == 45
     assert saved.speech_model == "small.en"
+    assert saved.radio_profile == "bca-frs-na"
+    assert saved.radio_channel == 3
+    assert saved.radio_squelch == 24
+    assert saved.radio_auto_calibrate is False
     assert saved.device_id == "device-1"
     assert saved.organization_id == "org-1"
     assert saved.site_id == "site-1"
@@ -252,6 +260,9 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "Location" in response.text
     assert "Arbitrary SMS/iMessage/third-party chat ingestion" in response.text
     assert "binary media upload" in response.text
+    assert "Radio receive" in response.text
+    assert "Auto-calibrate receiver" in response.text
+    assert "This does not enable transmit." in response.text
     assert 'src="/assets/terrasatch-logo.webp"' in response.text
     assert "brand-lockup-values" in response.text
     assert "Field Intelligence" in response.text
