@@ -57,7 +57,8 @@ For each exact artifact:
 6. Restart/reboot and confirm registration persists.
 7. Verify a valid, timestamped Authenticode signature from the expected TerraSatch publisher on every Windows executable, installer, and uninstaller.
 8. Record SHA-256 from the exact signed artifact that passed validation.
-9. Test real supported receive hardware when that platform is advertised as receiver-ready.
+9. Verify the GitHub build-provenance attestation for the exact downloaded artifact with `gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge`.
+10. Test real supported receive hardware when that platform is advertised as receiver-ready.
 
 TX remains provider/hardware gated and must never be inferred from hardware discovery alone.
 
@@ -66,11 +67,11 @@ TX remains provider/hardware gated and must never be inferred from hardware disc
 Keep immutable versioned objects in the public release store. Recommended paths:
 
 ```text
-edge/windows/v0.2.2/TerraSatch-Edge-Setup-x64.exe
-edge/linux/v0.2.2/terrasatch-edge_0.2.2_amd64.deb
-edge/linux/v0.2.2/terrasatch-edge_0.2.2_arm64.deb
-edge/macos/v0.2.2/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
-edge/macos/v0.2.2/TerraSatch-Edge-0.2.2-macOS-x64.pkg
+edge/windows/v0.2.5/TerraSatch-Edge-Setup-x64.exe
+edge/linux/v0.2.5/terrasatch-edge_0.2.2_amd64.deb
+edge/linux/v0.2.5/terrasatch-edge_0.2.2_arm64.deb
+edge/macos/v0.2.5/TerraSatch-Edge-0.2.2-macOS-arm64.pkg
+edge/macos/v0.2.5/TerraSatch-Edge-0.2.2-macOS-x64.pkg
 ```
 
 Never overwrite a validated versioned object with different bytes. Publish a new version/path instead.
@@ -89,7 +90,16 @@ VITE_EDGE_LINUX_AMD64_URL
 VITE_EDGE_LINUX_ARM64_URL
 ```
 
-Do not enable a platform button until its exact public Blob URL and checksum have passed the gates above. Keep the page version label aligned with the artifact version being advertised.
+Do not enable a platform button until its exact public URL and checksum have passed the gates above. Keep the page version label aligned with the artifact version being advertised.
+
+The manual public-release workflow expects these repository secrets when producing a signed Windows release:
+
+```text
+TERRASATCH_CODESIGN_PFX_BASE64
+TERRASATCH_CODESIGN_PFX_PASSWORD
+```
+
+The PFX must contain the TerraSatch code-signing certificate and private key. If those secrets are absent, the workflow fails closed unless an operator explicitly selects the unsigned-beta override. An unsigned beta must remain labeled as unsigned and may still trigger Windows SmartScreen.
 
 ## 6. Final public verification
 
@@ -99,6 +109,8 @@ From a clean browser/session:
 2. Confirm the intended platform button is enabled and points to the immutable versioned Blob object.
 3. Download the artifact through the public URL.
 4. Confirm SHA-256 matches the validated local artifact.
-5. Install that downloaded copy on a clean target and confirm `--version`, setup/pairing, `status`, and service heartbeat.
+5. Verify the GitHub attestation for that downloaded copy.
+6. On Windows, confirm `Get-AuthenticodeSignature` reports `Valid` and the expected TerraSatch signer for a signed release.
+7. Install that downloaded copy on a clean target and confirm `--version`, setup/pairing, `status`, and service heartbeat.
 
 Only then treat the native artifact as publicly released.
