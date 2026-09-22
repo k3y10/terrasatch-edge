@@ -4,9 +4,9 @@
 
 TerraSatch Edge runs on the field computer and connects physical hardware to `https://api.terrasatch.com`.
 
-> Current source milestone: **v0.2.5 release-trust + Satchy command/control runtime + receive-first BCA/FRS monitoring**
+> Current source milestone: **v0.2.8 release-trust + Satchy command/control runtime + receive-first BCA/FRS monitoring**
 > Field-asset mission support is provider-neutral infrastructure only; no drone, robot, or relay provider is installed by default.
-> The existing v0.2.4 Windows installer remains an unsigned beta compatibility build. For v0.2.5, the primary no-cost public Windows route is Microsoft Store MSIX; direct `.exe` distribution remains a compatibility/beta lane unless it is separately trusted-signed.  
+> The existing v0.2.4 Windows installer remains an unsigned beta compatibility build. For v0.2.8, the primary no-cost public Windows route is Microsoft Store MSIX; direct `.exe` distribution remains a compatibility/beta lane unless it is separately trusted-signed.  
 > Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge)
 
 ## Current TerraSatch connection surface
@@ -48,7 +48,7 @@ Nooelec / RTL-SDR   USB audio   GPS / serial   Network
                   TerraListen / Satchy
 ```
 
-## v0.2.4 development capabilities
+## Current development capabilities
 
 - Windows, macOS and Linux shared runtime
 - guided local Operator Console plus terminal/CLI mode
@@ -183,6 +183,9 @@ See [`docs/NATIVE_BUILDS.md`](docs/NATIVE_BUILDS.md) for the current macOS/Linux
 Windows — primary free Store/MSIX route:
 
 ```powershell
+# Full local release-candidate QA; does not use GitHub Actions.
+.\scripts\qa-windows-msix-local.ps1
+
 # Local development package using an installed TerraSatch test certificate.
 $env:TERRASATCH_MSIX_CERT_THUMBPRINT = "<development certificate thumbprint>"
 .\scripts\build-windows-msix.ps1
@@ -242,7 +245,7 @@ API target selection, organization assignment, site assignment, credential scope
 
 Hardware inventory and provider readiness are separate on purpose. A Nooelec/RTL-SDR can be identified before its receive tooling is ready, but the control plane receives `radio:receive` / `audio:capture` only when the required RTL receive utilities are present. HackRF is discovery-only until a TerraListen provider adapter actually implements its receive/transmit path.
 
-The v0.2.3 receive pilot can tune a selected BCA/FRS channel, capture a bounded carrier-gated call with `rtl_fm`, transcribe it locally, and submit it through the existing TerraSatch transmission ingest path. Continuous unattended channel operation, privacy-code filtering, and additional radio-provider adapters remain later operational phases.
+The current receive pilot can tune a selected BCA/FRS channel, capture a bounded carrier-gated call with `rtl_fm`, transcribe it locally, and submit it through the existing TerraSatch transmission ingest path. Continuous unattended channel operation, privacy-code filtering, and additional radio-provider adapters remain later operational phases.
 
 ## Security
 
