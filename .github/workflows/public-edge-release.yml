@@ -3,21 +3,32 @@ name: Public Edge Release
 on:
   workflow_dispatch:
     inputs:
-      allow_unsigned_windows_beta:
-        description: "Allow an unsigned Windows beta build when no TerraSatch code-signing certificate is configured"
+      msix_run_id:
+        description: "Validated Windows MSIX QA run to publish"
         required: true
-        default: false
-        type: boolean
+        default: "35688023259"
+        type: string
+  push:
+    branches:
+      - feat/release-trust-connected-stack
+    paths:
+      - ".github/workflows/public-edge-release.yml"
 
 permissions:
   contents: write
+  actions: read
   id-token: write
   attestations: write
+
+env:
+  VALIDATED_MSIX_RUN_ID: ${{ inputs.msix_run_id || '35688023259' }}
+  EXPECTED_MSIX_SHA256: "f8e858b390b3a3a3f7e356183c7495205a49b6f1308a634f22cb3e6d21f1570d"
+  EXPECTED_CERT_SHA256: "250148e90a46d2c38ce6528997f36c557c4aceaaed4a8d5ae9e6fec06fd90974"
 
 jobs:
   linux-amd64:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -48,86 +59,11 @@ jobs:
           path: release/terrasatch-edge_${{ steps.version.outputs.version }}_amd64.deb
           if-no-files-found: error
 
-  windows-x64:
-    runs-on: windows-latest
-    timeout-minutes: 35
-    env:
-      TERRASATCH_CODESIGN_PFX_BASE64: ${{ secrets.TERRASATCH_CODESIGN_PFX_BASE64 }}
-      TERRASATCH_CODESIGN_PFX_PASSWORD: ${{ secrets.TERRASATCH_CODESIGN_PFX_PASSWORD }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install Inno Setup
-        shell: powershell
-        run: choco install innosetup --no-progress -y
-
-      - name: Import TerraSatch Windows signing certificate
-        if: env.TERRASATCH_CODESIGN_PFX_BASE64 != ''
-        shell: powershell
-        run: |
-          $pfxPath = Join-Path $env:RUNNER_TEMP "terrasatch-codesign.pfx"
-          [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($env:TERRASATCH_CODESIGN_PFX_BASE64))
-          $password = ConvertTo-SecureString $env:TERRASATCH_CODESIGN_PFX_PASSWORD -AsPlainText -Force
-          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
-          if (-not $certificate) { throw "TerraSatch code-signing certificate import failed." }
-          "TERRASATCH_CODESIGN_CERT_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Remove-Item $pfxPath -Force
-
-      - name: Stage RTL-SDR runtime
-        shell: powershell
-        run: ./scripts/stage-rtlsdr-windows.ps1
-
-      - name: Build Windows x64 installer
-        shell: powershell
-        run: |
-          if ($env:TERRASATCH_CODESIGN_CERT_THUMBPRINT) {
-            ./scripts/build-windows.ps1
-          } elseif ("${{ inputs.allow_unsigned_windows_beta }}" -eq "true") {
-            ./scripts/build-windows.ps1 -AllowUnsigned
-          } else {
-            throw "Public Windows release requires Authenticode signing. Configure the TerraSatch PFX secrets or explicitly run an unsigned beta."
-          }
-
-      - name: Record Windows signing state
-        shell: powershell
-        run: |
-          $installer = "release\TerraSatch-Edge-Setup-x64.exe"
-          $signature = Get-AuthenticodeSignature -LiteralPath $installer
-          if ($signature.Status -eq "Valid") {
-            $state = "signed"
-            $subject = $signature.SignerCertificate.Subject
-            $thumbprint = $signature.SignerCertificate.Thumbprint
-          } else {
-            $state = "unsigned-beta"
-            $subject = ""
-            $thumbprint = ""
-          }
-          @("Status=$state", "Signer=$subject", "Thumbprint=$thumbprint") | Set-Content -Path "release\WINDOWS-SIGNING.txt" -Encoding utf8
-
-      - name: Attest Windows build provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: release/TerraSatch-Edge-Setup-x64.exe
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: edge-windows-x64
-          path: |
-            release/TerraSatch-Edge-Setup-x64.exe
-            release/WINDOWS-SIGNING.txt
-          if-no-files-found: error
-
   publish:
     needs:
       - linux-amd64
-      - windows-x64
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -138,72 +74,145 @@ jobs:
           VERSION="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Download built artifacts
+      - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          path: release-assets
+          name: edge-linux-amd64
+          path: release-assets/linux
 
-      - name: Publish immutable Edge release
+      - name: Download exact validated Windows MSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terrasatch-edge-msix-dev
+          run-id: ${{ env.VALIDATED_MSIX_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: release-assets/windows
+
+      - name: Verify Windows MSIX and certificate are the validated pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          MSIX="release-assets/windows/TerraSatch-Edge_0.2.5_x64.msix"
+          CERT="release-assets/windows/TerraSatch-MSIX-Dev.cer"
+
+          test -f "$MSIX"
+          test -f "$CERT"
+
+          ACTUAL_MSIX_SHA="$(sha256sum "$MSIX" | awk '{print $1}')"
+          ACTUAL_CERT_SHA="$(sha256sum "$CERT" | awk '{print $1}')"
+
+          if [ "$ACTUAL_MSIX_SHA" != "$EXPECTED_MSIX_SHA256" ]; then
+            echo "Validated MSIX hash mismatch: $ACTUAL_MSIX_SHA" >&2
+            exit 1
+          fi
+          if [ "$ACTUAL_CERT_SHA" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "Validated certificate hash mismatch: $ACTUAL_CERT_SHA" >&2
+            exit 1
+          fi
+
+          openssl x509 -inform DER -in "$CERT" -noout \
+            -subject -issuer -serial -dates -fingerprint -sha1 \
+            > release-assets/WINDOWS-MSIX-TRUST.txt
+
+          {
+            echo
+            echo "MSIX SHA256=$ACTUAL_MSIX_SHA"
+            echo "Certificate SHA256=$ACTUAL_CERT_SHA"
+            echo "Validated workflow run=https://github.com/k3y10/terrasatch-edge/actions/runs/${VALIDATED_MSIX_RUN_ID}"
+            echo "Trust lane=development/test self-signed certificate; Microsoft Store production signing is separate"
+          } >> release-assets/WINDOWS-MSIX-TRUST.txt
+
+      - name: Build release checksum manifest and install notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          MSIX="release-assets/windows/TerraSatch-Edge_${VERSION}_x64.msix"
+          CERT="release-assets/windows/TerraSatch-MSIX-Dev.cer"
+          LINUX="release-assets/linux/terrasatch-edge_${VERSION}_amd64.deb"
+
+          {
+            sha256sum "$MSIX" | sed 's#release-assets/windows/##'
+            sha256sum "$CERT" | sed 's#release-assets/windows/##'
+            sha256sum "$LINUX" | sed 's#release-assets/linux/##'
+          } > release-assets/SHA256SUMS.txt
+
+          cat > release-assets/WINDOWS-MSIX-INSTALL.txt <<EOF
+          TerraSatch Edge ${VERSION} Windows MSIX development/test install
+
+          1. Download both:
+             - TerraSatch-Edge_${VERSION}_x64.msix
+             - TerraSatch-MSIX-Dev.cer
+          2. Open PowerShell as Administrator.
+          3. Import the development certificate:
+             Import-Certificate -FilePath ".\\TerraSatch-MSIX-Dev.cer" -CertStoreLocation "Cert:\\LocalMachine\\TrustedPeople"
+          4. Install:
+             Add-AppxPackage -Path ".\\TerraSatch-Edge_${VERSION}_x64.msix"
+
+          This certificate is a development/test trust certificate for the exact validated
+          MSIX release. It is not the Microsoft Store production signature.
+
+          Certificate subject: CN=TerraSatch Inc.
+          Certificate SHA-1 thumbprint: D44DDFC99F4302712743F1F46A54987BE9A53C1D
+          Certificate valid through: 2026-09-29 04:44:39 UTC
+          EOF
+
+      - name: Publish immutable v0.2.5 prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
         run: |
           set -euo pipefail
-
           TAG="v${VERSION}"
-          WINDOWS="release-assets/edge-windows-x64/TerraSatch-Edge-Setup-x64.exe"
-          WINDOWS_SIGNING="release-assets/edge-windows-x64/WINDOWS-SIGNING.txt"
-          LINUX="release-assets/edge-linux-amd64/terrasatch-edge_${VERSION}_amd64.deb"
+          MSIX="release-assets/windows/TerraSatch-Edge_${VERSION}_x64.msix"
+          CERT="release-assets/windows/TerraSatch-MSIX-Dev.cer"
+          LINUX="release-assets/linux/terrasatch-edge_${VERSION}_amd64.deb"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists. Refusing to overwrite immutable release assets." >&2
             exit 1
           fi
 
-          WINDOWS_SHA="$(sha256sum "$WINDOWS" | awk '{print $1}')"
-          LINUX_SHA="$(sha256sum "$LINUX" | awk '{print $1}')"
-          {
-            printf "%s  %s\n" "$WINDOWS_SHA" "$(basename "$WINDOWS")"
-            printf "%s  %s\n" "$LINUX_SHA" "$(basename "$LINUX")"
-          } > release-assets/SHA256SUMS.txt
-
-          WINDOWS_STATUS="$(awk -F= '/^Status=/{print $2}' "$WINDOWS_SIGNING" | tr -d '\r')"
-          RELEASE_FLAG=""
-          if [ "$WINDOWS_STATUS" = "signed" ]; then
-            WINDOWS_NOTE="- Windows installer is Authenticode-signed and timestamped."
-          else
-            WINDOWS_NOTE="- Windows installer is an explicitly permitted unsigned beta build; Windows SmartScreen may warn."
-            RELEASE_FLAG="--prerelease"
-          fi
-
           NOTES="$(cat <<EOF
-          TerraSatch Edge $TAG for the current TerraSatch field/control-plane generation.
+          TerraSatch Edge $TAG prerelease for the current Satchy field-gateway generation.
 
-          Public downloads:
-          - Windows 10/11 x64 installer (.exe)
-          - Debian/Ubuntu AMD64 package (.deb)
+          Public beta downloads:
+          - Windows 10/11 x64 MSIX: TerraSatch-Edge_${VERSION}_x64.msix
+          - Windows development trust certificate: TerraSatch-MSIX-Dev.cer
+          - Debian/Ubuntu AMD64: terrasatch-edge_${VERSION}_amd64.deb
+          - SHA-256 manifest: SHA256SUMS.txt
 
-          Trust and verification:
-          $WINDOWS_NOTE
-          - SHA-256 values are published in SHA256SUMS.txt.
-          - Both native artifacts have GitHub build-provenance attestations.
-          - Verify provenance with: gh attestation verify <downloaded-file> --repo k3y10/terrasatch-edge
-          - Release assets are immutable: this workflow refuses to overwrite an existing version.
+          Windows trust:
+          - The MSIX and certificate are the exact pair validated by Windows MSIX QA run ${VALIDATED_MSIX_RUN_ID}.
+          - Certificate subject: CN=TerraSatch Inc.
+          - Certificate SHA-1 thumbprint: D44DDFC99F4302712743F1F46A54987BE9A53C1D
+          - Certificate valid through September 29, 2026 04:44:39 UTC.
+          - This is a development/test self-signed certificate, not Microsoft Store production signing.
+          - No PFX/private key is published.
 
-          Current platform connection surface:
-          - TerraSatch Edge field runtime for pairing, heartbeat, hardware inventory, radio receive, and Satchy control.
-          - TerraSatch Mobile and Garmin inReach feed the same canonical API field-ingest pipeline.
-          - TerraSatch API currently exposes 20 supported integration providers plus TerraSatch Edge and Mapbox as managed providers.
-          - Garmin inReach Portal Connect remains partner-gated; onX Backcountry, Gaia GPS, and AllTrails remain coming soon.
+          Validation:
+          - Windows MSIX build, Store-friendly manifest validation, and signature verification passed.
+          - Linux AMD64 package is built from this release source and carries GitHub build provenance.
+          - SHA-256 values for all downloadable files are in SHA256SUMS.txt.
 
-          Notes:
-          - Windows includes the staged RTL-SDR runtime used by the Edge receive path.
-          - Linux recommends the distribution rtl-sdr package.
-          - macOS packages are intentionally not published in this release lane.
-          - Field-asset mission providers remain disabled unless an explicit provider integration is configured.
+          Edge v0.2.5 includes the responsive Satchy field-gateway UI, guided local/provider
+          connection paths, secure short-lived QR workspace pairing, mobile field-capture guidance,
+          and receive-side radio configuration.
 
           Source commit: ${GITHUB_SHA}
           EOF
           )"
 
-          gh release create "$TAG"             "$WINDOWS"             "$LINUX"             release-assets/SHA256SUMS.txt             "$WINDOWS_SIGNING"             --target "${GITHUB_SHA}"             --title "TerraSatch Edge $TAG"             --notes "$NOTES"             $RELEASE_FLAG
+          gh release create "$TAG" \
+            "$MSIX" \
+            "$CERT" \
+            "$LINUX" \
+            release-assets/SHA256SUMS.txt \
+            release-assets/WINDOWS-MSIX-TRUST.txt \
+            release-assets/WINDOWS-MSIX-INSTALL.txt \
+            --target "${GITHUB_SHA}" \
+            --title "TerraSatch Edge $TAG beta" \
+            --notes "$NOTES" \
+            --prerelease
