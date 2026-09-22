@@ -109,11 +109,20 @@ def test_store_msix_uses_satchy_branding_and_startup_tasks() -> None:
     assert '"#f2960d"' in build_script
 
 
-def test_operator_console_uses_current_dark_amber_brand_tokens() -> None:
+def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     operator_page = (ROOT / "src" / "terrasatch_edge" / "operator_page.py").read_text(
         encoding="utf-8"
     )
 
     assert "--bg:#111317" in operator_page
     assert "--orange:#f2960d" in operator_page
-    assert "--green:" not in operator_page
+    assert "--positive:#42d17b" in operator_page
+    assert "Satchy field gateway" in operator_page
+    assert "Pair your workspace" in operator_page
+    assert "Connect field inputs" in operator_page
+    assert "Phone / TerraSatch Mobile" in operator_page
+    assert "Radio / SDR" in operator_page
+    assert "Meshtastic / LoRa" in operator_page
+    assert "Garmin / inReach" in operator_page
+    assert "does not need to be plugged into this Edge computer" in operator_page
+    assert "Scan local hardware" in operator_page
