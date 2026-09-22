@@ -51,7 +51,15 @@ The primary public Windows distribution path is the no-cost Microsoft Store MSIX
 
 Both startup processes use the same per-user configuration/state root under `%LOCALAPPDATA%\TerraSatch\Edge`.
 
-For local development testing with a self-signed TerraSatch code-signing certificate already installed in the Personal certificate store:
+For the normal release-candidate QA pass, use the local Windows harness. It creates a short-lived development certificate, runs the MSIX build/tests, Ruff and compile checks, validates the unpacked manifest, verifies the package signature, and prints the exact SHA-256 without using GitHub Actions:
+
+```powershell
+.\scripts\qa-windows-msix-local.ps1
+```
+
+Add `-Install` from an elevated PowerShell session to run the local install/startup-task helper against the exact package that just passed. Use `-SkipRtlSdrStage` only when intentionally validating the non-radio package path.
+
+For lower-level local development testing with an existing TerraSatch code-signing certificate already installed in the Personal certificate store:
 
 ```powershell
 $env:TERRASATCH_MSIX_CERT_THUMBPRINT = "<development certificate thumbprint>"
