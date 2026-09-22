@@ -69,7 +69,8 @@ def test_windows_release_build_bundles_brand_assets_and_requires_trusted_signing
     )
     brand_dir = ROOT / "src" / "terrasatch_edge" / "assets"
 
-    assert (brand_dir / "terrasatch-logo.webp").stat().st_size > 100_000
+    assert (brand_dir / "terrasatch-logo.png").stat().st_size > 100_000
+    assert (brand_dir / "satchy-approved-current.webp").stat().st_size > 5_000
     assert (brand_dir / "terrasatch-black-logo.png").stat().st_size > 100_000
     assert '"--collect-data", "terrasatch_edge"' in build_script
     assert "TERRASATCH_CODESIGN_CERT_THUMBPRINT" in build_script
@@ -104,7 +105,7 @@ def test_store_msix_uses_satchy_branding_and_startup_tasks() -> None:
     assert 'Enabled="false"' in manifest
     assert "packagedServices" not in manifest
     assert "localSystemServices" not in manifest
-    assert "terrasatch-logo.webp" in build_script
+    assert "terrasatch-logo.png" in build_script
     assert '"#111317"' in build_script
     assert '"#f2960d"' in build_script
 
@@ -141,4 +142,6 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     assert "This does not enable transmit." in operator_page
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "qrcode>=8,<9" in pyproject
+    assert "/assets/terrasatch-logo.png" in operator_page
+    assert "/assets/satchy-approved-current.webp" in operator_page
     assert "Scan local hardware" in operator_page
