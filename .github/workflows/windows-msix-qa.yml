@@ -52,7 +52,7 @@ jobs:
             -FilePath "release\TerraSatch-MSIX-Dev.cer" | Out-Null
           Import-Certificate `
             -FilePath "release\TerraSatch-MSIX-Dev.cer" `
-            -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" | Out-Null
+            -CertStoreLocation "Cert:\LocalMachine\TrustedPeople" | Out-Null
           "TERRASATCH_MSIX_CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File `
             -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
