@@ -263,10 +263,9 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "Radio receive" in response.text
     assert "Auto-calibrate receiver" in response.text
     assert "This does not enable transmit." in response.text
-    assert 'src="/assets/terrasatch-logo.webp"' in response.text
-    assert "brand-lockup-values" in response.text
+    assert 'src="/assets/terrasatch-logo.png"' in response.text
+    assert 'src="/assets/satchy-approved-current.webp"' in response.text
     assert "Field Intelligence" in response.text
-    assert "Listen</span><b>|</b><span>Watch" in response.text
     assert 'src="/assets/terrasatch-black-logo.png"' not in response.text
     assert "Follow these three steps" not in response.text
 
@@ -276,12 +275,16 @@ def test_console_serves_bundled_brand_artwork(tmp_path, monkeypatch):
     save_config(EdgeConfig(api_url="https://api.terrasatch.com"))
 
     client = TestClient(local_ui.build_app())
-    mark = client.get("/assets/terrasatch-logo.webp")
+    logo = client.get("/assets/terrasatch-logo.png")
+    approved = client.get("/assets/satchy-approved-current.webp")
     lockup = client.get("/assets/terrasatch-black-logo.png")
 
-    assert mark.status_code == 200
-    assert mark.headers["content-type"] == "image/webp"
-    assert len(mark.content) > 100_000
+    assert logo.status_code == 200
+    assert logo.headers["content-type"] == "image/png"
+    assert len(logo.content) > 100_000
+    assert approved.status_code == 200
+    assert approved.headers["content-type"] == "image/webp"
+    assert len(approved.content) > 5_000
     assert lockup.status_code == 200
     assert lockup.headers["content-type"] == "image/png"
     assert len(lockup.content) > 100_000
