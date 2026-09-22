@@ -117,6 +117,13 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     )
 
     assert "--bg:#111317" in operator_page
+    assert "--surface:#1b1d22" in operator_page
+    assert "--surface2:#292c32" in operator_page
+    assert "--surface3:#0d0e12" in operator_page
+    assert "--line:#2e3138" in operator_page
+    assert "--soft:#25272d" in operator_page
+    assert "--text:#e9e7e2" in operator_page
+    assert "--muted:#838995" in operator_page
     assert "--orange:#f2960d" in operator_page
     assert "--positive:#42d17b" in operator_page
     assert "TerraSatch field runtime" in operator_page
