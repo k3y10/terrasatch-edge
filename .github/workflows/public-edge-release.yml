@@ -8,12 +8,6 @@ on:
         required: true
         default: "35692293668"
         type: string
-  push:
-    branches:
-      - feat/release-trust-connected-stack
-    paths:
-      - ".github/workflows/public-edge-release.yml"
-
 permissions:
   contents: write
   actions: read
