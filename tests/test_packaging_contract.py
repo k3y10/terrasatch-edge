@@ -185,6 +185,8 @@ def test_windows_msix_qa_is_local_first_and_actions_are_manual_only() -> None:
     assert "[System.Management.Automation.Language.Parser]::ParseFile" in local_qa
     assert "build-windows-msix.ps1" in local_qa
     assert "install-windows-msix-dev.ps1" in local_qa
+    assert 'for ${ScriptPath}: $Details' in local_qa
+    assert 'for $ScriptPath: $Details' not in local_qa
 
 
 def test_windows_msix_build_script_has_one_complete_build_pipeline() -> None:
@@ -196,6 +198,16 @@ def test_windows_msix_build_script_has_one_complete_build_pipeline() -> None:
     assert build_script.count('Write-Host "[8/8] Verifying package structure and checksum"') == 1
     assert build_script.count("$VersionNumbers = @($VersionParts | ForEach-Object { [int]$_ })") == 1
     assert "\n }).Count -ne 0) {" not in build_script
+
+
+def test_msix_install_test_cleans_machine_trust_by_default() -> None:
+    install_script = (ROOT / "scripts" / "install-windows-msix-dev.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert "[switch]$KeepTrustedCertificate" in install_script
+    assert "Cert:\\LocalMachine\\TrustedPeople\\" in install_script
+    assert "Temporary development certificate removed." in install_script
 
 
 def test_store_msix_requires_partner_identity_and_store_valid_version() -> None:
