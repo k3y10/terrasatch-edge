@@ -6,7 +6,7 @@ TerraSatch Edge runs on the field computer and connects physical hardware to `ht
 
 > Current source milestone: **v0.2.8 release-trust + Satchy command/control runtime + receive-first BCA/FRS monitoring**
 > Field-asset mission support is provider-neutral infrastructure only; no drone, robot, or relay provider is installed by default.
-> The existing v0.2.4 Windows installer remains an unsigned beta compatibility build. For v0.2.8, the primary no-cost public Windows route is Microsoft Store MSIX; direct `.exe` distribution remains a compatibility/beta lane unless it is separately trusted-signed.  
+> The existing v0.2.4 Windows installer remains an unsigned beta compatibility build. For v0.2.8, the primary no-cost public Windows route is Microsoft Store MSIX; direct `.exe` distribution remains a compatibility/beta lane unless it is separately trusted-signed.
 > Public source: [`github.com/k3y10/terrasatch-edge`](https://github.com/k3y10/terrasatch-edge)
 
 ## Current TerraSatch connection surface
