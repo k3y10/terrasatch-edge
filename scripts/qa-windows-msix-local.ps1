@@ -66,7 +66,25 @@ function Resolve-SignTool {
 }
 
 try {
-    Write-Host "[1/7] Checking pull-request diff whitespace" -ForegroundColor Cyan
+    Write-Host "[1/8] Parsing Windows release PowerShell" -ForegroundColor Cyan
+    foreach ($ScriptPath in @(
+        (Join-Path $Root "scripts\build-windows-msix.ps1"),
+        (Join-Path $Root "scripts\install-windows-msix-dev.ps1")
+    )) {
+        $ParseTokens = $null
+        $ParseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile(
+            $ScriptPath,
+            [ref]$ParseTokens,
+            [ref]$ParseErrors
+        ) | Out-Null
+        if ($ParseErrors.Count -ne 0) {
+            $Details = ($ParseErrors | ForEach-Object { $_.Message }) -join "; "
+            throw "PowerShell parse validation failed for $ScriptPath: $Details"
+        }
+    }
+
+    Write-Host "[2/8] Checking pull-request diff whitespace" -ForegroundColor Cyan
     $MergeBase = (git merge-base HEAD origin/main).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $MergeBase) {
         throw "Could not resolve merge-base with origin/main. Run 'git fetch origin main' and retry."
@@ -75,14 +93,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "git diff --check failed for the branch diff." }
 
     if (-not $SkipRtlSdrStage) {
-        Write-Host "[2/7] Staging and validating RTL-SDR runtime" -ForegroundColor Cyan
+        Write-Host "[3/8] Staging and validating RTL-SDR runtime" -ForegroundColor Cyan
         & (Join-Path $Root "scripts\stage-rtlsdr-windows.ps1")
         if ($LASTEXITCODE -ne 0) { throw "RTL-SDR staging failed." }
     } else {
-        Write-Host "[2/7] RTL-SDR staging intentionally skipped" -ForegroundColor Yellow
+        Write-Host "[3/8] RTL-SDR staging intentionally skipped" -ForegroundColor Yellow
     }
 
-    Write-Host "[3/7] Creating short-lived local MSIX QA certificate" -ForegroundColor Cyan
+    Write-Host "[4/8] Creating short-lived local MSIX QA certificate" -ForegroundColor Cyan
     $Cert = New-SelfSignedCertificate `
         -Type CodeSigningCert `
         -Subject "CN=TerraSatch Inc." `
@@ -100,7 +118,7 @@ try {
 
     $env:TERRASATCH_MSIX_CERT_THUMBPRINT = $Cert.Thumbprint
 
-    Write-Host "[4/7] Building development-signed MSIX and running repository tests" -ForegroundColor Cyan
+    Write-Host "[5/8] Building development-signed MSIX and running repository tests" -ForegroundColor Cyan
     & (Join-Path $Root "scripts\build-windows-msix.ps1")
     if ($LASTEXITCODE -ne 0) { throw "MSIX build failed." }
 
@@ -109,7 +127,7 @@ try {
         throw "MSIX build environment was not created at $BuildPython."
     }
 
-    Write-Host "[5/7] Ruff and compile/import QA" -ForegroundColor Cyan
+    Write-Host "[6/8] Ruff and compile/import QA" -ForegroundColor Cyan
     & $BuildPython -m ruff check src tests
     if ($LASTEXITCODE -ne 0) { throw "Ruff failed." }
     & $BuildPython -m compileall -q src tests
@@ -117,7 +135,7 @@ try {
     & $BuildPython -c "import terrasatch_edge; from terrasatch_edge.cli import app; print(f'terrasatch-edge {terrasatch_edge.__version__} import OK')"
     if ($LASTEXITCODE -ne 0) { throw "Import smoke failed." }
 
-    Write-Host "[6/7] Validating unpacked Store-compatible manifest" -ForegroundColor Cyan
+    Write-Host "[7/8] Validating unpacked Store-compatible manifest" -ForegroundColor Cyan
     if (-not (Test-Path -LiteralPath $VerifyManifest)) {
         throw "Expected unpacked manifest was not found: $VerifyManifest"
     }
@@ -150,7 +168,7 @@ try {
         throw "Store-compatible MSIX must not declare Windows service restricted capabilities."
     }
 
-    Write-Host "[7/7] Verifying exact package signature and SHA-256" -ForegroundColor Cyan
+    Write-Host "[8/8] Verifying exact package signature and SHA-256" -ForegroundColor Cyan
     if (-not (Test-Path -LiteralPath $Artifact)) { throw "Expected MSIX was not created: $Artifact" }
     $SignTool = Resolve-SignTool
     & $SignTool verify /pa /v $Artifact
