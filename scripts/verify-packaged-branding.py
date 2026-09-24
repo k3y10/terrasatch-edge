@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 from pathlib import Path
 import socket
@@ -12,6 +13,8 @@ import tempfile
 import time
 from urllib.error import URLError
 from urllib.request import urlopen
+
+from PIL import Image
 
 
 def main() -> None:
@@ -37,7 +40,6 @@ def main() -> None:
         try:
             for name, media_type in (
                 ("terrasatch-logo.png", "image/png"),
-                ("satchy-approved-current.webp", "image/webp"),
             ):
                 deadline = time.monotonic() + 30
                 while True:
@@ -52,11 +54,14 @@ def main() -> None:
                         time.sleep(0.2)
                 expected = (canonical / name).read_bytes()
                 assert data == expected, f"Packaged artwork differs: {name}"
+                with Image.open(io.BytesIO(data)) as artwork:
+                    artwork.load()  # Headers/dimensions alone can pass for truncated images.
                 print(f"Verified packaged {name}: {hashlib.sha256(data).hexdigest()}")
             with urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
                 page = response.read().decode()
             assert "Field Intelligence" in page, "Production wording missing"
             assert '/assets/terrasatch-logo.png' in page, "Canonical logo missing"
+            assert '/assets/satchy-approved-current.webp' not in page, "Truncated legacy artwork rendered"
             print("Packaged Edge console renders with production branding.")
         finally:
             process.terminate()

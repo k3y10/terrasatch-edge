@@ -151,7 +151,8 @@ def test_operator_console_uses_current_satchy_gateway_theme_and_flow() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "qrcode>=8,<9" in pyproject
     assert "/assets/terrasatch-logo.png" in operator_page
-    assert "/assets/satchy-approved-current.webp" in operator_page
+    assert "/assets/satchy-approved-current.webp" not in operator_page
+    assert "/assets/terrasatch-logo.png" in operator_page
     assert "Satchy turns field signals into shared operational context while preserving where each piece of information came from." in operator_page
     assert "Consequential outputs remain traceable and human-reviewed." in operator_page
     assert "Scan local hardware" in operator_page
