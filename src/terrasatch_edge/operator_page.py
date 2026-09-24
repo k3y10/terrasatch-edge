@@ -402,7 +402,7 @@ details{{border-top:1px solid var(--line)}}details:first-of-type{{border-top:0}}
   <div class="dialog-head"><h2>Advanced gateway details</h2><button class="icon-button" type="button" aria-label="Close details" onclick="closeDialog('detailsDialog')">×</button></div>
   <div class="dialog-body"><p class="dialog-intro">Hardware and technical information for troubleshooting this field gateway.</p>
     <div class="brand-lockup" role="img" aria-label="TerraSatch — Satchy Approved">
-      <img class="brand-lockup-approved" src="/assets/satchy-approved-current.webp" alt="">
+      <img src="/assets/terrasatch-logo.png" alt="Satchy" width="128" height="128" style="display:block;margin:auto;object-fit:contain">
     </div>
     <details open><summary>Connected local hardware</summary><div class="detail-content"><ul class="device-list">{device_items}</ul></div></details>
     <details><summary>Developer identifiers</summary><div class="detail-content id-list">

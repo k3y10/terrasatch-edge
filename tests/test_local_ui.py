@@ -264,7 +264,8 @@ def test_ready_console_replaces_wizard_with_calm_home(tmp_path, monkeypatch):
     assert "Auto-calibrate receiver" in response.text
     assert "This does not enable transmit." in response.text
     assert 'src="/assets/terrasatch-logo.png"' in response.text
-    assert 'src="/assets/satchy-approved-current.webp"' in response.text
+    assert 'src="/assets/satchy-approved-current.webp"' not in response.text
+    assert 'src="/assets/terrasatch-logo.png"' in response.text
     assert "Field Intelligence" in response.text
     assert "Follow these three steps" not in response.text
 
