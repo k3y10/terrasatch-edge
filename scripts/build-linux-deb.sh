@@ -40,9 +40,12 @@ rm -rf build dist release/linux-root
   --clean \
   --onedir \
   --name terrasatch-edge \
+  --collect-data terrasatch_edge \
   --collect-all uvicorn \
   --collect-all fastapi \
   packaging/entrypoints/edge_cli.py
+
+"$PYTHON" scripts/verify-packaged-branding.py dist/terrasatch-edge/terrasatch-edge
 
 PKGROOT="$ROOT/release/linux-root"
 INSTALL_ROOT="$PKGROOT/opt/terrasatch-edge"
