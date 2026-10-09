@@ -145,6 +145,7 @@ $SignTool = Resolve-SignTool
 # Trust only this explicitly selected public signer, never the Trusted Root store.
 $StorePath = "Cert:\LocalMachine\TrustedPeople\$Thumbprint"
 $AddedTrust = $false
+$PackageInstalled = $false
 if (-not $PSCmdlet.ShouldProcess($MsixPath, "Trust matched public signer, verify timestamp, and install MSIX")) {
     return
 }
@@ -173,6 +174,7 @@ try {
     Write-Host "Signature and timestamp verification passed." -ForegroundColor Green
     Write-Host "Installing MSIX. Existing running Edge processes may close." -ForegroundColor Yellow
     Add-AppxPackage -Path $MsixPath -ForceApplicationShutdown -ErrorAction Stop
+    $PackageInstalled = $true
 
     $Installed = @(Get-AppxPackage -Name $IdentityName |
         Where-Object { $_.Version.ToString() -eq $Version })
@@ -186,8 +188,10 @@ try {
     Write-Host "After beta testing, remove this signer from LocalMachine\TrustedPeople if no longer needed: $Thumbprint"
 }
 catch {
-    if ($AddedTrust) {
+    if ($AddedTrust -and -not $PackageInstalled) {
         Remove-Item -LiteralPath $StorePath -Force -ErrorAction SilentlyContinue
+    } elseif ($AddedTrust -and $PackageInstalled) {
+        Write-Warning "The package may now be installed. Retaining certificate trust until you inspect or uninstall it."
     }
     throw
 }
