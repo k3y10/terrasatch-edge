@@ -4,6 +4,7 @@ param(
     [string]$Publisher,
     [string]$PublisherDisplayName,
     [string]$CertificateThumbprint,
+    [string]$TimestampUrl = "http://timestamp.digicert.com",
     [switch]$StoreUpload
 )
 
@@ -322,8 +323,17 @@ if ($StoreUpload) {
     if (-not $Certificate) { throw "MSIX signing certificate $CertificateThumbprint was not found." }
     if (-not $Certificate.HasPrivateKey) { throw "MSIX signing certificate does not expose a private key." }
     if ($Certificate.Subject -ne $Publisher) { throw "Manifest Publisher must exactly match certificate Subject. Manifest: $Publisher Certificate: $($Certificate.Subject)" }
-    & $SignTool sign /v /fd SHA256 /sha1 $CertificateThumbprint $Artifact
-    if ($LASTEXITCODE -ne 0) { throw "MSIX SignTool signing failed with exit code $LASTEXITCODE." }
+    $SigningTime = Get-Date
+    if ($SigningTime -lt $Certificate.NotBefore -or $SigningTime -ge $Certificate.NotAfter) {
+        throw "MSIX certificate is not currently valid for a NEW signature. Timestamping cannot rescue signing after expiration. Certificate valid $($Certificate.NotBefore) through $($Certificate.NotAfter)."
+    }
+    if (-not $TimestampUrl -or $TimestampUrl -notmatch "^https?://") {
+        throw "A valid RFC 3161 timestamp server URL is required for beta MSIX signing."
+    }
+    # RFC 3161 timestamping must succeed while the signing certificate is valid.
+    # Do not fall back to untimestamped signatures if the endpoint is unavailable.
+    & $SignTool sign /v /fd SHA256 /sha1 $CertificateThumbprint /tr $TimestampUrl /td SHA256 $Artifact
+    if ($LASTEXITCODE -ne 0) { throw "MSIX signing/timestamping failed with exit code $LASTEXITCODE. Do not distribute this package." }
 
     # A self-signed development package is intentionally not machine-trusted yet.
     # Verify that the exact expected signer is embedded and that the signature is not
@@ -340,7 +350,7 @@ if ($StoreUpload) {
     if ($Signature.Status.ToString() -notin @("Valid", "UnknownError")) {
         throw "MSIX development signature failed integrity inspection: $($Signature.Status) $($Signature.StatusMessage)"
     }
-    Write-Host "Development signature signer matches; machine trust will be validated during elevated install QA." -ForegroundColor Yellow
+    Write-Host "Development signer and RFC 3161 timestamp requested successfully; machine trust is validated during elevated install QA." -ForegroundColor Yellow
 }
 
 Write-Host "[8/8] Verifying package structure and checksum" -ForegroundColor Cyan
