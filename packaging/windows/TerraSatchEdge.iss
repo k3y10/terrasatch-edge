@@ -1,6 +1,6 @@
 #define MyAppName "TerraSatch Edge"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.2.8"
+  #define MyAppVersion "0.2.9"
 #endif
 #define MyAppPublisher "TerraSatch"
 #define MyAppExeName "TerraSatchEdge.exe"

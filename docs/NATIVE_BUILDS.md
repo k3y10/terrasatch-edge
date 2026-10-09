@@ -2,7 +2,7 @@
 
 TerraSatch Edge is packaged on the operating system and CPU architecture that will run it. The public downloads page must not activate a build until that exact artifact has been installed and tested on native hardware or an appropriate clean VM.
 
-Current development package version: **0.2.8**. The primary no-cost public Windows path is Microsoft Store MSIX. Direct `.exe` builds remain beta/compatibility artifacts unless separately trusted-signed.
+Current development package version: **0.2.9**. The owner-selected immediate Windows path is a timestamped, test-signed MSIX beta with manual certificate trust. The longer-term trusted public path remains Microsoft Store MSIX. Direct `.exe` builds remain beta/compatibility artifacts unless separately trusted-signed. A signing timestamp records when the package was signed; it does not eliminate certificate expiry or substitute for publisher trust.
 
 ## Current TerraSatch connection surface
 

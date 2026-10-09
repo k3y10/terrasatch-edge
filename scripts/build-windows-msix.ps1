@@ -4,13 +4,42 @@ param(
     [string]$Publisher,
     [string]$PublisherDisplayName,
     [string]$CertificateThumbprint,
+    [string]$TimestampUrl = "http://timestamp.digicert.com",
     [switch]$StoreUpload
 )
 
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$Root = [IO.Path]::GetFullPath($Root)
 Set-Location $Root
+
+function Remove-NativeBuildPath {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+    foreach ($Path in $Paths) {
+        $Absolute = [IO.Path]::GetFullPath($Path)
+        if (-not $Absolute.StartsWith($Root + [IO.Path]::DirectorySeparatorChar,
+                [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing build cleanup outside the current checkout: $Absolute"
+        }
+        $Ancestor = $Absolute
+        while ($Ancestor -and $Ancestor.Length -ge $Root.Length) {
+            if (Test-Path -LiteralPath $Ancestor) {
+                $Item = Get-Item -LiteralPath $Ancestor -Force
+                if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                    throw "Refusing build cleanup through a reparse point: $Ancestor"
+                }
+            }
+            if ($Ancestor -eq $Root) { break }
+            $Ancestor = [IO.Path]::GetDirectoryName($Ancestor)
+        }
+        if (Test-Path -LiteralPath $Absolute) {
+            Remove-Item -LiteralPath $Absolute -Recurse -Force
+        }
+    }
+}
+
+$ReleaseDir = Join-Path $Root "release"
 
 $IdentityNameWasProvided = [bool]$IdentityName -or [bool]$env:TERRASATCH_MSIX_IDENTITY_NAME
 $PublisherWasProvided = [bool]$Publisher -or [bool]$env:TERRASATCH_MSIX_PUBLISHER
@@ -35,6 +64,14 @@ if ($StoreUpload) {
     }
     if ($IdentityName -eq "TerraSatch.Edge.Dev") {
         throw "StoreUpload cannot use the development identity TerraSatch.Edge.Dev. Copy the exact Package/Identity/Name from Partner Center."
+    }
+}
+
+if (-not $StoreUpload) {
+    $TimestampUri = $null
+    if (-not [Uri]::TryCreate($TimestampUrl, [UriKind]::Absolute, [ref]$TimestampUri) -or
+        $TimestampUri.Scheme -notin @("http", "https")) {
+        throw "A valid RFC 3161 timestamp server is required for local MSIX signing."
     }
 }
 
@@ -92,9 +129,9 @@ $SignTool = Resolve-WindowsSdkTool -Name "signtool.exe"
 $BuildVenv = Join-Path $Root ".build-venv"
 if (-not (Test-Path -LiteralPath $BuildVenv)) { py -3.12 -m venv $BuildVenv }
 $Python = Join-Path $BuildVenv "Scripts\python.exe"
-& $Python -m pip install --upgrade pip
+& $Python -m pip install --no-cache-dir --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed with exit code $LASTEXITCODE." }
-& $Python -m pip install -e ".[serial,usb,ui,build,dev]"
+& $Python -m pip install --no-cache-dir -e ".[serial,usb,ui,build,dev]"
 if ($LASTEXITCODE -ne 0) { throw "MSIX build dependency installation failed with exit code $LASTEXITCODE." }
 
 $IconFile = Join-Path $Root "packaging\windows\assets\TerraSatchEdge.ico"
@@ -107,7 +144,8 @@ foreach ($RequiredPath in @($LogoSource, $ManifestTemplate)) {
 if (-not (Test-Path -LiteralPath $IconFile)) {
     Write-Host "Generating TerraSatch MSIX icon from Satchy artwork" -ForegroundColor Cyan
     New-Item -ItemType Directory -Force (Split-Path -Parent $IconFile) | Out-Null
-    $IconScript = Join-Path $env:TEMP "terrasatch-msix-icon.py"
+    New-Item -ItemType Directory -Force $ReleaseDir | Out-Null
+    $IconScript = Join-Path $ReleaseDir "terrasatch-msix-icon.py"
     $IconPython = @'
 from pathlib import Path
 import sys
@@ -135,19 +173,19 @@ canvas.save(destination, format="ICO", sizes=[(16,16),(24,24),(32,32),(48,48),(6
         & $Python $IconScript $LogoSource $IconFile
         if ($LASTEXITCODE -ne 0) { throw "MSIX icon generation failed with exit code $LASTEXITCODE." }
     } finally {
-        Remove-Item -LiteralPath $IconScript -Force -ErrorAction SilentlyContinue
+        Remove-NativeBuildPath -Paths @($IconScript)
     }
 }
 if (-not (Test-Path -LiteralPath $IconFile)) { throw "MSIX icon generation did not create $IconFile." }
 
 Write-Host "[1/8] Running Edge tests" -ForegroundColor Cyan
 $PytestBaseTemp = Join-Path $Root ".pytest-tmp-msix"
-Remove-Item -LiteralPath $PytestBaseTemp -Recurse -Force -ErrorAction SilentlyContinue
+Remove-NativeBuildPath -Paths @($PytestBaseTemp)
 try {
     & $Python -m pytest --basetemp $PytestBaseTemp
     if ($LASTEXITCODE -ne 0) { throw "TerraSatch Edge tests failed with exit code $LASTEXITCODE." }
 } finally {
-    Remove-Item -LiteralPath $PytestBaseTemp -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-NativeBuildPath -Paths @($PytestBaseTemp)
 }
 
 $Version = (& $Python -c "import terrasatch_edge; print(terrasatch_edge.__version__)").Trim()
@@ -189,7 +227,7 @@ $VerifyDir = Join-Path $ReleaseDir "msix-verify"
 $Artifact = Join-Path $ReleaseDir "TerraSatch-Edge_${Version}_x64.msix"
 
 Write-Host "[2/8] Building Edge runtime" -ForegroundColor Cyan
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $RuntimeDist, $RuntimeBuild, $RuntimeSpec, $LauncherDist, $LauncherBuild, $LauncherSpec, $Staging, $VerifyDir
+Remove-NativeBuildPath -Paths @($RuntimeDist, $RuntimeBuild, $RuntimeSpec, $LauncherDist, $LauncherBuild, $LauncherSpec, $Staging, $VerifyDir)
 New-Item -ItemType Directory -Force $ReleaseDir | Out-Null
 Invoke-PyInstaller `
     -Name "TerraSatchEdge" `
@@ -201,6 +239,8 @@ Invoke-PyInstaller `
 
 $RuntimeDir = Join-Path $RuntimeDist "TerraSatchEdge"
 if (-not (Test-Path -LiteralPath (Join-Path $RuntimeDir "TerraSatchEdge.exe"))) { throw "MSIX runtime executable was not built." }
+& $Python (Join-Path $Root "scripts\verify-packaged-branding.py") (Join-Path $RuntimeDir "TerraSatchEdge.exe")
+if ($LASTEXITCODE -ne 0) { throw "Frozen Windows runtime artwork/console verification failed." }
 
 Write-Host "[3/8] Staging optional RTL-SDR runtime" -ForegroundColor Cyan
 $VendorRtlSdr = Join-Path $Root "packaging\windows\vendor\rtl-sdr"
@@ -237,7 +277,7 @@ foreach ($Name in @("TerraSatchEdgeConsoleLauncher", "TerraSatchEdgeAgentLaunche
     Copy-Item -LiteralPath (Join-Path $LauncherDist "$Name.exe") -Destination $Staging -Force
 }
 
-$AssetScript = Join-Path $env:TEMP "terrasatch-msix-assets.py"
+$AssetScript = Join-Path $ReleaseDir "terrasatch-msix-assets.py"
 $AssetPython = @'
 from pathlib import Path
 import sys
@@ -289,7 +329,7 @@ try {
     & $Python $AssetScript $LogoSource (Join-Path $Staging "Assets")
     if ($LASTEXITCODE -ne 0) { throw "MSIX asset generation failed with exit code $LASTEXITCODE." }
 } finally {
-    Remove-Item -LiteralPath $AssetScript -Force -ErrorAction SilentlyContinue
+    Remove-NativeBuildPath -Paths @($AssetScript)
 }
 
 function Escape-XmlValue {
@@ -304,7 +344,7 @@ $Manifest = $Manifest.Replace("__VERSION__", (Escape-XmlValue $MsixVersion))
 Set-Content -LiteralPath (Join-Path $Staging "AppxManifest.xml") -Value $Manifest -Encoding UTF8
 
 Write-Host "[6/8] Packing TerraSatch Edge MSIX" -ForegroundColor Cyan
-Remove-Item -LiteralPath $Artifact -Force -ErrorAction SilentlyContinue
+Remove-NativeBuildPath -Paths @($Artifact)
 & $MakeAppx pack /d $Staging /p $Artifact /o
 if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed with exit code $LASTEXITCODE." }
 
@@ -322,7 +362,11 @@ if ($StoreUpload) {
     if (-not $Certificate) { throw "MSIX signing certificate $CertificateThumbprint was not found." }
     if (-not $Certificate.HasPrivateKey) { throw "MSIX signing certificate does not expose a private key." }
     if ($Certificate.Subject -ne $Publisher) { throw "Manifest Publisher must exactly match certificate Subject. Manifest: $Publisher Certificate: $($Certificate.Subject)" }
-    & $SignTool sign /v /fd SHA256 /sha1 $CertificateThumbprint $Artifact
+    if ($Certificate.NotBefore.ToUniversalTime() -gt [datetime]::UtcNow -or
+        $Certificate.NotAfter.ToUniversalTime() -le [datetime]::UtcNow) {
+        throw "The selected signing certificate is not currently valid."
+    }
+    & $SignTool sign /v /fd SHA256 /sha1 $CertificateThumbprint /tr $TimestampUrl /td SHA256 $Artifact
     if ($LASTEXITCODE -ne 0) { throw "MSIX SignTool signing failed with exit code $LASTEXITCODE." }
 
     # A self-signed development package is intentionally not machine-trusted yet.
@@ -336,6 +380,9 @@ if ($StoreUpload) {
     $EmbeddedThumbprint = ($Signature.SignerCertificate.Thumbprint -replace "\s", "").ToUpperInvariant()
     if ($EmbeddedThumbprint -ne $CertificateThumbprint) {
         throw "MSIX signer thumbprint does not match the selected development certificate."
+    }
+    if (-not $Signature.TimeStamperCertificate) {
+        throw "The package has no verified timestamp signer; do not publish it."
     }
     if ($Signature.Status.ToString() -notin @("Valid", "UnknownError")) {
         throw "MSIX development signature failed integrity inspection: $($Signature.Status) $($Signature.StatusMessage)"
