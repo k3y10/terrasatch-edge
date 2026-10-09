@@ -55,7 +55,7 @@ $Zip = [IO.Compression.ZipFile]::OpenRead($MsixPath)
 try {
     $Entry = $Zip.GetEntry("AppxManifest.xml")
     if (-not $Entry) { throw "MSIX is missing AppxManifest.xml." }
-    $Reader = New-Object IO.StreamReader($Entry.Open())
+    $Reader = [IO.StreamReader]::new($Entry.Open())
     try { [xml]$Manifest = $Reader.ReadToEnd() }
     finally { $Reader.Dispose() }
 }
@@ -125,7 +125,7 @@ $CertificatePath = (Resolve-Path -LiteralPath $CertificatePath).Path
 if ([IO.Path]::GetExtension($CertificatePath) -ne ".cer") {
     throw "Use a public .cer file only. Never import a private .pfx for beta trust."
 }
-$PublicCert = New-Object Security.Cryptography.X509Certificates.X509Certificate2($CertificatePath)
+$PublicCert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($CertificatePath)
 if ($PublicCert.HasPrivateKey) { throw "Certificate file must contain only the public certificate." }
 if ((Normalize-Hex $PublicCert.Thumbprint) -ne $Thumbprint) {
     throw "Provided .cer does not match the exact MSIX signing certificate."
@@ -134,7 +134,7 @@ if ($PublicCert.Subject -ne $PublisherName) {
     throw "Unexpected subject on the public certificate."
 }
 
-$Principal = New-Object Security.Principal.WindowsPrincipal(
+$Principal = [Security.Principal.WindowsPrincipal]::new(
     [Security.Principal.WindowsIdentity]::GetCurrent()
 )
 if (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
