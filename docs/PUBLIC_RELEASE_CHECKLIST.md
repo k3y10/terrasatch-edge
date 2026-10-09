@@ -117,6 +117,48 @@ The Store-upload MSIX is intentionally unsigned locally. Microsoft Store applies
 
 The existing PFX/Authenticode release path is optional only for a future separately signed direct-download `.exe` lane; it is not required for the free Microsoft Store route.
 
+### Retire the expired Windows development artifact
+
+The historical `v0.2.8-windows-beta` MSIX and `TerraSatch-MSIX-Dev.cer` used a self-signed
+`CN=TerraSatch Inc.` certificate that expired September 29, 2026. The inspected package
+has development identity `TerraSatch.Edge.Dev`, SHA-256
+`12a86ef9dab92cb925b37376302d05d2ccad1185e1498f2cf27cfcd4a8250c49`, and no timestamp
+signer exposed by Windows. Keep historical assets immutable; remove its installation
+and certificate-trust links until a verified replacement is available. Do not renew only
+the `.cer`, change the clock, trust a new root, or label a development signature as
+Microsoft Store signing.
+
+On October 9, 2026 the owner explicitly selected a terminal beta rebuild using the
+existing self-signed certificate valid through September 22, 2028. This is an exception
+to the default Store-only public Windows lane: label the replacement as a test-signed
+beta requiring manual trust, use a new immutable release/version, verify the exact
+matching certificate and a trusted signing timestamp, and retain the old artifacts.
+The certificate still has an expiry date; a verified timestamp records signing time
+and does not make the certificate immortal or provide Microsoft Store certification.
+Never publish the signing private key or its PFX. Install the public certificate only
+in Trusted People as documented for testing, not as a new trusted root. The public
+trust verifier below intentionally does not certify self-signed beta artifacts.
+
+After Store certification, check the exact delivered replacement, using the identity
+from Partner Center (not guessed development values):
+
+```powershell
+.\scripts\verify-windows-msix-release.ps1 -MsixPath "<delivered Store MSIX path>" -ExpectedIdentityName "<Partner Center Package/Identity/Name>" -ExpectedPublisher "<Partner Center Package/Identity/Publisher>"
+```
+
+This gate requires Windows signature status `Valid`, rejects self-signed/development
+packages and mismatched identities, and reports the exact artifact hash. It does not
+claim Store certification or install/upgrade acceptance: verify these independently,
+including the installed package's `SignatureKind` of `Store`. Verify the new package
+family and preserve existing Edge state before switching from a development identity;
+different package identities do not establish an in-place upgrade. Do not uninstall
+the prior runtime or remove its data until the transition is verified.
+
+Microsoft Store re-signing can change the final package hash. Verify and document the
+delivered package, not only the unsigned submission archive. Public direct signing,
+when used, must have a verified timestamp; Windows trust validation handles certificate
+expiry at signing time. A checksum or `UnknownError` alone is not public signing proof.
+
 ## 6. Final public verification
 
 From a clean browser/session:
