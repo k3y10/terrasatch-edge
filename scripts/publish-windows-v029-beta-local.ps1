@@ -77,8 +77,24 @@ $remoteSource = (& gh api "repos/$repo/commits/$sourceSha" --jq ".sha" 2>$null)
 if ($LASTEXITCODE -ne 0 -or ($remoteSource | Out-String).Trim() -ne $sourceSha) {
   throw "Local source commit not on GitHub. Push the reviewed v0.2.9 source first."
 }
-& gh release view $tag --repo $repo --json tagName >$null 2>$null
-if ($LASTEXITCODE -eq 0) { throw "Release already exists; refusing to overwrite it." }
+# PowerShell 5.1 turns redirected native-command stderr into NativeCommandError
+# under ErrorActionPreference=Stop. Do not probe for a missing release with
+# "gh release view ... 2>$null": a 404 is expected for a first publication.
+# List releases instead; this is a successful command even when no tag exists.
+$releaseListJson = & gh release list --repo $repo --limit 100 --json tagName
+AssertExit "List existing releases"
+$existingReleases = @($releaseListJson | ConvertFrom-Json |
+    Where-Object { $_.tagName -eq $tag })
+if ($existingReleases.Count -gt 0) {
+  throw "Release $tag already exists; refusing to overwrite or republish it."
+}
+# Also reject any pre-existing tag without a release, so --target cannot
+# silently associate the new binaries with an unrelated source commit.
+$remoteTagRefs = @(& git -C $SourceDir ls-remote --refs --tags origin "refs/tags/$tag")
+AssertExit "Check remote release tag"
+if ($remoteTagRefs.Count -gt 0) {
+  throw "Git tag $tag already exists without a matching listed release. Review manually; nothing was uploaded."
+}
 
 Write-Host "PASS: preflight checks." -ForegroundColor Green
 Write-Host "Package SHA256: $hash"
